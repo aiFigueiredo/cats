@@ -1,41 +1,66 @@
-//
-//  gatoUITests.swift
-//  gatoUITests
-//
-//  Created by José Miguel Figueiredo on 23/02/2026.
-//
-
 import XCTest
 
 final class gatoUITests: XCTestCase {
-
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testBreedsListDisplaysOnLaunch() throws {
+        let app = launchApp()
+
+        XCTAssertTrue(app.navigationBars["Breeds"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.collectionViews["breeds_list"].waitForExistence(timeout: 5) || app.tables["breeds_list"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSearchFiltersBreeds() throws {
+        let app = launchApp()
+
+        let searchField = app.searchFields.firstMatch
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("birm")
+
+        XCTAssertTrue(app.staticTexts["Birman"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Abyssinian"].exists)
+    }
+
+    @MainActor
+    func testFavoriteFlowUpdatesFavoritesAverage() throws {
+        let app = launchApp()
+
+        let favoriteButton = app.buttons["favorite_abys"]
+        XCTAssertTrue(favoriteButton.waitForExistence(timeout: 5))
+        favoriteButton.tap()
+
+        app.tabBars.buttons["Favorites"].tap()
+
+        XCTAssertTrue(app.tables["favorites_list"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Abyssinian"].exists)
+        XCTAssertTrue(app.otherElements["favorites_average_lifespan"].exists)
+    }
+
+    @MainActor
+    func testOfflineCachedBrowsing() throws {
+        let app = launchApp([
+            "UI_TEST_PRELOAD_CACHE": "1",
+            "UI_TEST_OFFLINE": "1"
+        ])
+
+        XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "identifier == 'breeds_error_banner' OR label CONTAINS[c] 'No internet connection'")).firstMatch.exists)
+    }
+
+    @MainActor
+    private func launchApp(_ extraEnvironment: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-    }
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+        app.launchEnvironment["UI_TEST_MODE"] = "1"
+        extraEnvironment.forEach { key, value in
+            app.launchEnvironment[key] = value
         }
+        app.launch()
+        return app
     }
 }

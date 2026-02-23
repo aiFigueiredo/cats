@@ -11,8 +11,13 @@ struct gatoApp: App {
     @StateObject private var favoritesStore: Store<FavoritesFeature.State, FavoritesFeature.Action>
 
     init() {
-        let persistenceStore = PersistenceStore.live()
-        let dependencies = AppDependencies.live(context: persistenceStore.container.viewContext)
+        let environment = ProcessInfo.processInfo.environment
+        let isUITest = environment["UI_TEST_MODE"] == "1"
+
+        let persistenceStore = isUITest ? PersistenceStore.inMemory() : PersistenceStore.live()
+        let dependencies = isUITest
+            ? AppDependencies.uiTest(context: persistenceStore.container.viewContext, environment: environment)
+            : AppDependencies.live(context: persistenceStore.container.viewContext)
 
         self.persistenceStore = persistenceStore
         self.dependencies = dependencies
