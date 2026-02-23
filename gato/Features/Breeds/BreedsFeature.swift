@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 struct BreedsFeature {
     struct State {
@@ -10,6 +11,8 @@ struct BreedsFeature {
         var isLoadingPage = false
         var errorMessage: String?
         var bannerMessage: String?
+        var isOfflineMode = false
+        var showFatalOfflineState = false
         var hasLoaded = false
 
         var currentPage = 0
@@ -34,7 +37,7 @@ struct BreedsFeature {
 
         case cachedBreedsLoaded([Breed])
         case networkBreedsLoaded([Breed])
-        case networkFailed(String)
+        case networkFailed(String, Bool)
 
         case favoritePersisted(String, Bool)
         case favoritePersistFailed(String, String)
@@ -53,11 +56,13 @@ struct BreedsFeature {
             state.hasLoaded = true
             state.isLoading = true
             state.errorMessage = nil
+            state.showFatalOfflineState = false
             return [loadBreedsEffect(dependencies: dependencies)]
 
         case .retryTapped:
             state.isLoading = true
             state.errorMessage = nil
+            state.showFatalOfflineState = false
             return [loadBreedsEffect(dependencies: dependencies)]
 
         case .dismissBanner:
@@ -125,16 +130,21 @@ struct BreedsFeature {
 
         case .networkBreedsLoaded(let breeds):
             state.isLoading = false
+            state.isOfflineMode = false
+            state.showFatalOfflineState = false
             applyLoadedBreeds(state: &state, breeds: breeds)
             return []
 
-        case .networkFailed(let message):
+        case .networkFailed(let message, let isOffline):
             state.isLoading = false
             if state.breeds.isEmpty {
                 state.errorMessage = message
+                state.showFatalOfflineState = isOffline
             } else {
-                state.bannerMessage = message
+                state.bannerMessage = isOffline ? "Offline mode: showing cached data." : message
+                state.isOfflineMode = isOffline
             }
+            AppLogger.ui.error("Breeds sync failed: \(message, privacy: .public)")
             return []
 
         case .loadNextPage:
@@ -217,7 +227,8 @@ struct BreedsFeature {
                 actions.append(.networkBreedsLoaded(merged))
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? "Failed to refresh breeds."
-                actions.append(.networkFailed(message))
+                let isOffline = (error as? CatAPIError) == .offline
+                actions.append(.networkFailed(message, isOffline))
             }
 
             return actions

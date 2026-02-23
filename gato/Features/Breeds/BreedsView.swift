@@ -7,6 +7,8 @@ struct BreedsView: View {
         Group {
             if store.state.isLoading && store.state.breeds.isEmpty {
                 loadingView
+            } else if store.state.showFatalOfflineState {
+                fatalOfflineView
             } else if let errorMessage = store.state.errorMessage, store.state.breeds.isEmpty {
                 errorView(message: errorMessage)
             } else if store.state.breeds.isEmpty {
@@ -46,6 +48,13 @@ struct BreedsView: View {
 
     private var listView: some View {
         List {
+            if store.state.isOfflineMode {
+                Text("Offline mode: showing cached data.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("offline_banner")
+            }
+
             ForEach(store.state.breeds) { breed in
                 NavigationLink {
                     if let currentBreed = store.state.allBreeds.first(where: { $0.id == breed.id }) {
@@ -94,7 +103,7 @@ struct BreedsView: View {
                                 .frame(width: 44, height: 44)
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
+                        .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
                         .accessibilityIdentifier("favorite_\(breed.id)")
                         .disabled(store.state.favoriteToggleInFlight.contains(breed.id))
                     }
@@ -154,6 +163,27 @@ struct BreedsView: View {
                 store.send(.retryTapped)
             }
             .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var fatalOfflineView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text("You are offline")
+                .font(.headline)
+            Text("No cached breeds are available yet. Connect to the internet and try again.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+            Button("Retry") {
+                store.send(.retryTapped)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("retry_button")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

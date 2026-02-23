@@ -1,4 +1,5 @@
 import CoreData
+import OSLog
 import Foundation
 
 struct PersistenceClient {
@@ -32,6 +33,7 @@ extension PersistenceClient {
                         return try context.fetch(request).map { $0.toDomain(isFavorite: favoriteIDs.contains($0.id)) }
                     }
                 } catch {
+                    AppLogger.persistence.error("loadBreeds failed: \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed loading breeds: \(error.localizedDescription)")
                 }
             },
@@ -60,6 +62,7 @@ extension PersistenceClient {
                         }
                     }
                 } catch {
+                    AppLogger.persistence.error("upsertBreeds failed: \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed storing breeds: \(error.localizedDescription)")
                 }
             },
@@ -67,6 +70,7 @@ extension PersistenceClient {
                 do {
                     return try loadFavorites(context: context)
                 } catch {
+                    AppLogger.persistence.error("loadFavoriteIDs failed: \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed loading favorites: \(error.localizedDescription)")
                 }
             },
@@ -94,6 +98,7 @@ extension PersistenceClient {
                         }
                     }
                 } catch {
+                    AppLogger.persistence.error("setFavorite failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed updating favorite: \(error.localizedDescription)")
                 }
             },
@@ -106,6 +111,7 @@ extension PersistenceClient {
                         return try context.fetch(request).first != nil
                     }
                 } catch {
+                    AppLogger.persistence.error("isFavorite failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed checking favorite: \(error.localizedDescription)")
                 }
             }

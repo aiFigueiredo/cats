@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 struct CatAPIClient {
     var fetchBreeds: (_ page: Int, _ limit: Int) async throws -> [Breed]
@@ -70,18 +71,23 @@ extension CatAPIClient {
                     request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
                 }
 
-                let (data, response) = try await session.data(for: request)
-                let httpResponse = try validate(response: response)
-
-                if httpResponse.statusCode == 204 {
-                    return []
-                }
-
                 do {
-                    let payload = try decoder.decode([BreedDTO].self, from: data)
-                    return payload.map { $0.toDomain() }
+                    AppLogger.api.debug("Fetching breeds page=\(page) limit=\(limit)")
+                    let (data, response) = try await session.data(for: request)
+                    let httpResponse = try validate(response: response)
+
+                    if httpResponse.statusCode == 204 {
+                        return []
+                    }
+
+                    do {
+                        let payload = try decoder.decode([BreedDTO].self, from: data)
+                        return payload.map { $0.toDomain() }
+                    } catch {
+                        throw CatAPIError.decoding(error.localizedDescription)
+                    }
                 } catch {
-                    throw CatAPIError.decoding(error.localizedDescription)
+                    throw mapError(error)
                 }
             },
             fetchBreedImage: { breedID in
@@ -101,14 +107,19 @@ extension CatAPIClient {
                     request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
                 }
 
-                let (data, response) = try await session.data(for: request)
-                _ = try validate(response: response)
-
                 do {
-                    let payload = try decoder.decode([BreedImageDTO].self, from: data)
-                    return payload.first?.url
+                    AppLogger.api.debug("Fetching breed image id=\(breedID)")
+                    let (data, response) = try await session.data(for: request)
+                    _ = try validate(response: response)
+
+                    do {
+                        let payload = try decoder.decode([BreedImageDTO].self, from: data)
+                        return payload.first?.url
+                    } catch {
+                        throw CatAPIError.decoding(error.localizedDescription)
+                    }
                 } catch {
-                    throw CatAPIError.decoding(error.localizedDescription)
+                    throw mapError(error)
                 }
             }
         )
@@ -129,6 +140,23 @@ extension CatAPIClient {
         default:
             throw CatAPIError.unknown("Unexpected status code: \(httpResponse.statusCode)")
         }
+    }
+
+    static func mapError(_ error: Error) -> CatAPIError {
+        if let apiError = error as? CatAPIError {
+            return apiError
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost, .timedOut:
+                return .offline
+            default:
+                return .unknown(urlError.localizedDescription)
+            }
+        }
+
+        return .unknown(error.localizedDescription)
     }
 }
 
