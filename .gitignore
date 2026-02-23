@@ -1,0 +1,6 @@
+# Xcode
+DerivedData/
+*.xcresult
+
+# Local secrets
+Config/Secrets.xcconfig

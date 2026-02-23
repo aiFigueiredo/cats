@@ -42,7 +42,7 @@ struct CatAPIConfiguration {
     static var live: CatAPIConfiguration {
         CatAPIConfiguration(
             baseURL: URL(string: "https://api.thecatapi.com")!,
-            apiKey: ProcessInfo.processInfo.environment["CAT_API_KEY"]
+            apiKey: ProcessInfo.processInfo.environment["CAT_API_KEY"] ?? (Bundle.main.object(forInfoDictionaryKey: "CAT_API_KEY") as? String)
         )
     }
 }
