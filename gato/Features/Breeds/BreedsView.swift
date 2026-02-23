@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BreedsView: View {
     @ObservedObject var store: Store<BreedsFeature.State, BreedsFeature.Action>
+    let imageClient: ImageClient
 
     var body: some View {
         Group {
@@ -41,7 +42,7 @@ struct BreedsView: View {
                     }
             }
         }
-        .task {
+        .onAppear {
             store.send(.onAppear)
         }
     }
@@ -63,6 +64,7 @@ struct BreedsView: View {
                                 breed: currentBreed,
                                 isFavoriteToggleInFlight: store.state.favoriteToggleInFlight.contains(breed.id)
                             ),
+                            imageClient: imageClient,
                             onToggleFavorite: {
                                 store.send(.toggleFavoriteTapped(breed.id))
                             }
@@ -72,19 +74,16 @@ struct BreedsView: View {
                     }
                 } label: {
                     HStack(spacing: 12) {
-                        AsyncImage(url: breed.imageURL) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            default:
-                                Image(systemName: "cat.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .padding(10)
-                                    .foregroundStyle(.secondary)
-                            }
+                        RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } placeholder: {
+                            Image(systemName: "cat.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .padding(10)
+                                .foregroundStyle(.secondary)
                         }
                         .frame(width: 56, height: 56)
                         .background(Color(.systemGray6))

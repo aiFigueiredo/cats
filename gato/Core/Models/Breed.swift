@@ -7,7 +7,7 @@ struct Breed: Equatable, Identifiable, Sendable {
     let temperament: String?
     let description: String?
     let lifeSpan: LifeSpanRange?
-    let imageURL: URL?
+    var imageURL: URL?
     var isFavorite: Bool
 }
 

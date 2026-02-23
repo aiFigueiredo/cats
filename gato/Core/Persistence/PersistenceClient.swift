@@ -5,6 +5,7 @@ import Foundation
 struct PersistenceClient {
     var loadBreeds: () throws -> [Breed]
     var upsertBreeds: (_ breeds: [Breed], _ now: Date) throws -> Void
+    var updateBreedImage: (_ breedID: String, _ imageURL: URL?) throws -> Void
     var loadFavoriteIDs: () throws -> Set<String>
     var setFavorite: (_ breedID: String, _ isFavorite: Bool) throws -> Void
     var isFavorite: (_ breedID: String) throws -> Bool
@@ -64,6 +65,29 @@ extension PersistenceClient {
                 } catch {
                     AppLogger.persistence.error("upsertBreeds failed: \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed storing breeds: \(error.localizedDescription)")
+                }
+            },
+            updateBreedImage: { breedID, imageURL in
+                do {
+                    try context.performSync {
+                        let request = CDBreed.fetchRequest()
+                        request.predicate = NSPredicate(format: "id == %@", breedID)
+                        request.fetchLimit = 1
+
+                        guard let managed = try context.fetch(request).first else {
+                            return
+                        }
+
+                        managed.imageURL = imageURL?.absoluteString
+                        managed.lastUpdatedAt = Date()
+
+                        if context.hasChanges {
+                            try context.save()
+                        }
+                    }
+                } catch {
+                    AppLogger.persistence.error("updateBreedImage failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    throw PersistenceError.failed("Failed updating breed image: \(error.localizedDescription)")
                 }
             },
             loadFavoriteIDs: {

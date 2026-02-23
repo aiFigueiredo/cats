@@ -53,7 +53,8 @@ struct gatoApp: App {
             AppView(
                 store: appStore,
                 breedsStore: breedsStore,
-                favoritesStore: favoritesStore
+                favoritesStore: favoritesStore,
+                imageClient: dependencies.imageClient
             )
         }
     }

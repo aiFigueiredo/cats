@@ -23,6 +23,7 @@ struct BreedsFeature {
         var searchToken = UUID()
 
         var favoriteToggleInFlight: Set<String> = []
+        var imageHydrationInFlight: Set<String> = []
     }
 
     enum Action {
@@ -31,6 +32,7 @@ struct BreedsFeature {
         case dismissBanner
         case toggleFavoriteTapped(String)
         case breedRowAppeared(String)
+        case breedImageHydrated(String, URL?)
 
         case searchQueryChanged(String)
         case applySearchDebounced(UUID)
@@ -99,13 +101,28 @@ struct BreedsFeature {
             return []
 
         case .breedRowAppeared(let breedID):
-            guard state.canLoadMore, !state.isLoadingPage else { return [] }
-            guard let index = state.breeds.firstIndex(where: { $0.id == breedID }) else { return [] }
+            var effects: [Effect<Action>] = []
 
-            let thresholdIndex = max(state.breeds.count - 5, 0)
-            if index >= thresholdIndex {
-                return [.send(.loadNextPage)]
+            if state.canLoadMore, !state.isLoadingPage, let index = state.breeds.firstIndex(where: { $0.id == breedID }) {
+                let thresholdIndex = max(state.breeds.count - 5, 0)
+                if index >= thresholdIndex {
+                    effects.append(.send(.loadNextPage))
+                }
             }
+
+            if let breed = state.allBreeds.first(where: { $0.id == breedID }),
+               breed.imageURL == nil,
+               !state.imageHydrationInFlight.contains(breedID) {
+                state.imageHydrationInFlight.insert(breedID)
+                effects.append(hydrateBreedImageEffect(breedID: breedID, dependencies: dependencies))
+            }
+
+            return effects
+
+        case .breedImageHydrated(let breedID, let imageURL):
+            state.imageHydrationInFlight.remove(breedID)
+            guard let imageURL else { return [] }
+            setBreedImage(state: &state, breedID: breedID, imageURL: imageURL)
             return []
 
         case .searchQueryChanged(let query):
@@ -163,6 +180,20 @@ struct BreedsFeature {
     private static func setFavorite(state: inout State, breedID: String, isFavorite: Bool) {
         if let index = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
             state.allBreeds[index].isFavorite = isFavorite
+        }
+        recomputeFilter(state: &state, resetPagination: false)
+    }
+
+    private static func setBreedImage(state: inout State, breedID: String, imageURL: URL) {
+        if let index = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
+            state.allBreeds[index].imageURL = imageURL
+        }
+        recomputeFilter(state: &state, resetPagination: false)
+    }
+
+    private static func setFavoriteFlags(state: inout State, favoriteIDs: Set<String>) {
+        for index in state.allBreeds.indices {
+            state.allBreeds[index].isFavorite = favoriteIDs.contains(state.allBreeds[index].id)
         }
         recomputeFilter(state: &state, resetPagination: false)
     }
@@ -232,6 +263,21 @@ struct BreedsFeature {
             }
 
             return actions
+        }
+    }
+
+    private static func hydrateBreedImageEffect(breedID: String, dependencies: AppDependencies) -> Effect<Action> {
+        Effect.run {
+            do {
+                let imageURL = try await dependencies.apiClient.fetchBreedImage(breedID)
+                if let imageURL {
+                    try? dependencies.persistenceClient.updateBreedImage(breedID, imageURL)
+                }
+                return [.breedImageHydrated(breedID, imageURL)]
+            } catch {
+                AppLogger.api.error("Image hydration failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                return [.breedImageHydrated(breedID, nil)]
+            }
         }
     }
 

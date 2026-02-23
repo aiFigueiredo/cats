@@ -1,17 +1,17 @@
 import Foundation
 
 struct ImageClient {
-    var request: (_ url: URL?) -> URLRequest?
+    var service: ImageLoadService
 }
 
 extension ImageClient {
     static var live: ImageClient {
-        ImageClient { url in
-            guard let url else { return nil }
-            var request = URLRequest(url: url)
-            request.cachePolicy = .returnCacheDataElseLoad
-            request.timeoutInterval = 30
-            return request
-        }
+        let configuration = URLSessionConfiguration.default
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        configuration.urlCache = .shared
+        configuration.timeoutIntervalForRequest = 30
+
+        let session = URLSession(configuration: configuration)
+        return ImageClient(service: ImageLoadService(session: session))
     }
 }

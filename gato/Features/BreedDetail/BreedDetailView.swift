@@ -2,24 +2,22 @@ import SwiftUI
 
 struct BreedDetailView: View {
     let state: BreedDetailFeature.State
+    let imageClient: ImageClient
     let onToggleFavorite: () -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                AsyncImage(url: state.breed.imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        Image(systemName: "cat.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .padding(24)
-                            .foregroundStyle(.secondary)
-                    }
+                RemoteImageView(url: state.breed.imageURL, imageClient: imageClient) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Image(systemName: "cat.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .padding(24)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 220)

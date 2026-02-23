@@ -94,7 +94,9 @@ extension CatAPIClient {
                 var components = URLComponents(url: configuration.baseURL.appending(path: "/v1/images/search"), resolvingAgainstBaseURL: false)
                 components?.queryItems = [
                     URLQueryItem(name: "breed_ids", value: breedID),
-                    URLQueryItem(name: "limit", value: "1")
+                    URLQueryItem(name: "limit", value: "1"),
+                    URLQueryItem(name: "has_breeds", value: "1"),
+                    URLQueryItem(name: "include_breeds", value: "1")
                 ]
 
                 guard let url = components?.url else {
@@ -114,7 +116,17 @@ extension CatAPIClient {
 
                     do {
                         let payload = try decoder.decode([BreedImageDTO].self, from: data)
-                        return payload.first?.url
+                        guard let first = payload.first else {
+                            return nil
+                        }
+
+                        if let breeds = first.breeds, !breeds.isEmpty,
+                           !breeds.contains(where: { $0.id == breedID }) {
+                            AppLogger.api.warning("Ignoring mismatched image response for breed id=\(breedID, privacy: .public)")
+                            return nil
+                        }
+
+                        return first.url
                     } catch {
                         throw CatAPIError.decoding(error.localizedDescription)
                     }
@@ -198,5 +210,10 @@ private struct BreedDTO: Decodable {
 }
 
 private struct BreedImageDTO: Decodable {
+    struct BreedReferenceDTO: Decodable {
+        let id: String
+    }
+
     let url: URL?
+    let breeds: [BreedReferenceDTO]?
 }
