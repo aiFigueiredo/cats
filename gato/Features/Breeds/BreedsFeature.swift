@@ -3,6 +3,7 @@ import Foundation
 struct BreedsFeature {
     struct State {
         var allBreeds: [Breed] = []
+        var filteredBreeds: [Breed] = []
         var breeds: [Breed] = []
 
         var isLoading = false
@@ -14,6 +15,9 @@ struct BreedsFeature {
         var currentPage = 0
         var pageSize = 20
         var canLoadMore = false
+
+        var searchQuery = ""
+        var searchToken = UUID()
     }
 
     enum Action {
@@ -22,6 +26,9 @@ struct BreedsFeature {
         case dismissBanner
         case toggleFavorite(String)
         case breedRowAppeared(String)
+
+        case searchQueryChanged(String)
+        case applySearchDebounced(UUID)
 
         case cachedBreedsLoaded([Breed])
         case networkBreedsLoaded([Breed])
@@ -66,6 +73,22 @@ struct BreedsFeature {
             }
             return []
 
+        case .searchQueryChanged(let query):
+            state.searchQuery = query
+            let token = UUID()
+            state.searchToken = token
+            return [
+                .run {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    return [.applySearchDebounced(token)]
+                }
+            ]
+
+        case .applySearchDebounced(let token):
+            guard token == state.searchToken else { return [] }
+            recomputeFilter(state: &state, resetPagination: true)
+            return []
+
         case .cachedBreedsLoaded(let breeds):
             applyLoadedBreeds(state: &state, breeds: breeds)
             return []
@@ -94,38 +117,54 @@ struct BreedsFeature {
 
     private static func applyLoadedBreeds(state: inout State, breeds: [Breed]) {
         state.allBreeds = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        state.currentPage = 0
-        state.breeds = []
-        appendNextPage(state: &state)
+        recomputeFilter(state: &state, resetPagination: true)
+    }
+
+    private static func recomputeFilter(state: inout State, resetPagination: Bool) {
+        let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty {
+            state.filteredBreeds = state.allBreeds
+        } else {
+            state.filteredBreeds = state.allBreeds.filter {
+                $0.name.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
+        }
+
+        if resetPagination {
+            state.currentPage = 0
+            state.breeds = []
+            appendNextPage(state: &state)
+        } else {
+            let displayedCount = min(state.currentPage * state.pageSize, state.filteredBreeds.count)
+            state.breeds = Array(state.filteredBreeds.prefix(displayedCount))
+            state.canLoadMore = displayedCount < state.filteredBreeds.count
+        }
     }
 
     private static func appendNextPage(state: inout State) {
-        guard !state.allBreeds.isEmpty else {
+        guard !state.filteredBreeds.isEmpty else {
             state.breeds = []
             state.canLoadMore = false
             state.currentPage = 0
             return
         }
 
-        let nextCount = min(state.breeds.count + state.pageSize, state.allBreeds.count)
+        let nextCount = min(state.breeds.count + state.pageSize, state.filteredBreeds.count)
         guard nextCount > state.breeds.count else {
             state.canLoadMore = false
             return
         }
 
-        state.breeds = Array(state.allBreeds.prefix(nextCount))
+        state.breeds = Array(state.filteredBreeds.prefix(nextCount))
         state.currentPage += 1
-        state.canLoadMore = state.breeds.count < state.allBreeds.count
+        state.canLoadMore = state.breeds.count < state.filteredBreeds.count
     }
 
     private static func toggleFavoriteLocally(state: inout State, breedID: String) {
         if let allIndex = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
             state.allBreeds[allIndex].isFavorite.toggle()
         }
-
-        if let listIndex = state.breeds.firstIndex(where: { $0.id == breedID }) {
-            state.breeds[listIndex].isFavorite.toggle()
-        }
+        recomputeFilter(state: &state, resetPagination: false)
     }
 
     private static func loadBreedsEffect(dependencies: AppDependencies) -> Effect<Action> {

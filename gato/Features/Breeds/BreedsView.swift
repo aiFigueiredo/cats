@@ -16,6 +16,14 @@ struct BreedsView: View {
             }
         }
         .navigationTitle("Breeds")
+        .searchable(
+            text: Binding(
+                get: { store.state.searchQuery },
+                set: { store.send(.searchQueryChanged($0)) }
+            ),
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search breeds"
+        )
         .overlay(alignment: .top) {
             if let banner = store.state.bannerMessage {
                 Text(banner)
