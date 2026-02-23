@@ -8,6 +8,7 @@ struct gatoApp: App {
 
     @StateObject private var appStore: Store<AppFeature.State, AppFeature.Action>
     @StateObject private var breedsStore: Store<BreedsFeature.State, BreedsFeature.Action>
+    @StateObject private var favoritesStore: Store<FavoritesFeature.State, FavoritesFeature.Action>
 
     init() {
         let persistenceStore = PersistenceStore.live()
@@ -31,11 +32,24 @@ struct gatoApp: App {
                 }
             )
         )
+
+        _favoritesStore = StateObject(
+            wrappedValue: Store(
+                initialState: FavoritesFeature.State(),
+                reducer: { state, action in
+                    FavoritesFeature.reduce(state: &state, action: action, dependencies: dependencies)
+                }
+            )
+        )
     }
 
     var body: some Scene {
         WindowGroup {
-            AppView(store: appStore, breedsStore: breedsStore)
+            AppView(
+                store: appStore,
+                breedsStore: breedsStore,
+                favoritesStore: favoritesStore
+            )
         }
     }
 }
