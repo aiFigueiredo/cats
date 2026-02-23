@@ -72,7 +72,7 @@ struct BreedsView: View {
                     Spacer()
 
                     Button {
-                        store.send(.toggleFavorite(breed.id))
+                        store.send(.toggleFavoriteTapped(breed.id))
                     } label: {
                         Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
                             .foregroundStyle(breed.isFavorite ? .red : .secondary)
@@ -81,6 +81,7 @@ struct BreedsView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
                     .accessibilityIdentifier("favorite_\(breed.id)")
+                    .disabled(store.state.favoriteToggleInFlight.contains(breed.id))
                 }
                 .contentShape(Rectangle())
                 .onAppear {

@@ -18,13 +18,15 @@ struct BreedsFeature {
 
         var searchQuery = ""
         var searchToken = UUID()
+
+        var favoriteToggleInFlight: Set<String> = []
     }
 
     enum Action {
         case onAppear
         case retryTapped
         case dismissBanner
-        case toggleFavorite(String)
+        case toggleFavoriteTapped(String)
         case breedRowAppeared(String)
 
         case searchQueryChanged(String)
@@ -33,6 +35,9 @@ struct BreedsFeature {
         case cachedBreedsLoaded([Breed])
         case networkBreedsLoaded([Breed])
         case networkFailed(String)
+
+        case favoritePersisted(String, Bool)
+        case favoritePersistFailed(String, String)
 
         case loadNextPage
     }
@@ -59,8 +64,33 @@ struct BreedsFeature {
             state.bannerMessage = nil
             return []
 
-        case .toggleFavorite(let breedID):
-            toggleFavoriteLocally(state: &state, breedID: breedID)
+        case .toggleFavoriteTapped(let breedID):
+            guard !state.favoriteToggleInFlight.contains(breedID) else { return [] }
+            guard let existing = state.allBreeds.first(where: { $0.id == breedID }) else { return [] }
+
+            state.favoriteToggleInFlight.insert(breedID)
+            let nextValue = !existing.isFavorite
+
+            return [
+                .run {
+                    do {
+                        try dependencies.persistenceClient.setFavorite(breedID, nextValue)
+                        return [.favoritePersisted(breedID, nextValue)]
+                    } catch {
+                        let message = (error as? LocalizedError)?.errorDescription ?? "Failed to update favorite."
+                        return [.favoritePersistFailed(breedID, message)]
+                    }
+                }
+            ]
+
+        case .favoritePersisted(let breedID, let isFavorite):
+            state.favoriteToggleInFlight.remove(breedID)
+            setFavorite(state: &state, breedID: breedID, isFavorite: isFavorite)
+            return []
+
+        case .favoritePersistFailed(let breedID, let message):
+            state.favoriteToggleInFlight.remove(breedID)
+            state.bannerMessage = message
             return []
 
         case .breedRowAppeared(let breedID):
@@ -120,6 +150,13 @@ struct BreedsFeature {
         recomputeFilter(state: &state, resetPagination: true)
     }
 
+    private static func setFavorite(state: inout State, breedID: String, isFavorite: Bool) {
+        if let index = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
+            state.allBreeds[index].isFavorite = isFavorite
+        }
+        recomputeFilter(state: &state, resetPagination: false)
+    }
+
     private static func recomputeFilter(state: inout State, resetPagination: Bool) {
         let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty {
@@ -158,13 +195,6 @@ struct BreedsFeature {
         state.breeds = Array(state.filteredBreeds.prefix(nextCount))
         state.currentPage += 1
         state.canLoadMore = state.breeds.count < state.filteredBreeds.count
-    }
-
-    private static func toggleFavoriteLocally(state: inout State, breedID: String) {
-        if let allIndex = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
-            state.allBreeds[allIndex].isFavorite.toggle()
-        }
-        recomputeFilter(state: &state, resetPagination: false)
     }
 
     private static func loadBreedsEffect(dependencies: AppDependencies) -> Effect<Action> {
