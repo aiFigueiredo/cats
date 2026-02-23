@@ -47,41 +47,57 @@ struct BreedsView: View {
     private var listView: some View {
         List {
             ForEach(store.state.breeds) { breed in
-                HStack(spacing: 12) {
-                    AsyncImage(url: breed.imageURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        default:
-                            Image(systemName: "cat.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .padding(10)
-                                .foregroundStyle(.secondary)
+                NavigationLink {
+                    if let currentBreed = store.state.allBreeds.first(where: { $0.id == breed.id }) {
+                        BreedDetailView(
+                            state: BreedDetailFeature.State(
+                                breed: currentBreed,
+                                isFavoriteToggleInFlight: store.state.favoriteToggleInFlight.contains(breed.id)
+                            ),
+                            onToggleFavorite: {
+                                store.send(.toggleFavoriteTapped(breed.id))
+                            }
+                        )
+                    } else {
+                        Text("Breed unavailable")
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        AsyncImage(url: breed.imageURL) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            default:
+                                Image(systemName: "cat.fill")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .padding(10)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .frame(width: 56, height: 56)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        Text(breed.name)
+                            .font(.body)
+
+                        Spacer()
+
+                        Button {
+                            store.send(.toggleFavoriteTapped(breed.id))
+                        } label: {
+                            Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
+                                .foregroundStyle(breed.isFavorite ? .red : .secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
+                        .accessibilityIdentifier("favorite_\(breed.id)")
+                        .disabled(store.state.favoriteToggleInFlight.contains(breed.id))
                     }
-                    .frame(width: 56, height: 56)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    Text(breed.name)
-                        .font(.body)
-
-                    Spacer()
-
-                    Button {
-                        store.send(.toggleFavoriteTapped(breed.id))
-                    } label: {
-                        Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
-                            .foregroundStyle(breed.isFavorite ? .red : .secondary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
-                    .accessibilityIdentifier("favorite_\(breed.id)")
-                    .disabled(store.state.favoriteToggleInFlight.contains(breed.id))
                 }
                 .contentShape(Rectangle())
                 .onAppear {
