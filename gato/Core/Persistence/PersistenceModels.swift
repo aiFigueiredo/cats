@@ -93,13 +93,13 @@ private func makeManagedObjectModel() -> NSManagedObjectModel {
 
     let breedIDIndex = NSFetchIndexDescription(
         name: "breed_id_index",
-        elements: [NSFetchIndexElementDescription(property: breedEntity.properties[0] as! NSPropertyDescription, collationType: .binary)]
+        elements: [NSFetchIndexElementDescription(property: breedEntity.properties[0], collationType: .binary)]
     )
     breedEntity.indexes = [breedIDIndex]
 
     let favoriteIDIndex = NSFetchIndexDescription(
         name: "favorite_id_index",
-        elements: [NSFetchIndexElementDescription(property: favoriteEntity.properties[0] as! NSPropertyDescription, collationType: .binary)]
+        elements: [NSFetchIndexElementDescription(property: favoriteEntity.properties[0], collationType: .binary)]
     )
     favoriteEntity.indexes = [favoriteIDIndex]
 
