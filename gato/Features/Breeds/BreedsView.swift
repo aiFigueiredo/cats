@@ -37,43 +37,56 @@ struct BreedsView: View {
     }
 
     private var listView: some View {
-        List(store.state.breeds) { breed in
-            HStack(spacing: 12) {
-                AsyncImage(url: breed.imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        Image(systemName: "cat.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .padding(10)
-                            .foregroundStyle(.secondary)
+        List {
+            ForEach(store.state.breeds) { breed in
+                HStack(spacing: 12) {
+                    AsyncImage(url: breed.imageURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        default:
+                            Image(systemName: "cat.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .padding(10)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .frame(width: 56, height: 56)
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    Text(breed.name)
+                        .font(.body)
+
+                    Spacer()
+
+                    Button {
+                        store.send(.toggleFavorite(breed.id))
+                    } label: {
+                        Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
+                            .foregroundStyle(breed.isFavorite ? .red : .secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
+                    .accessibilityIdentifier("favorite_\(breed.id)")
                 }
-                .frame(width: 56, height: 56)
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                Text(breed.name)
-                    .font(.body)
-
-                Spacer()
-
-                Button {
-                    store.send(.toggleFavorite(breed.id))
-                } label: {
-                    Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
-                        .foregroundStyle(breed.isFavorite ? .red : .secondary)
-                        .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+                .onAppear {
+                    store.send(.breedRowAppeared(breed.id))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
-                .accessibilityIdentifier("favorite_\(breed.id)")
             }
-            .contentShape(Rectangle())
+
+            if store.state.isLoadingPage {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            }
         }
         .listStyle(.plain)
         .accessibilityIdentifier("breeds_list")
