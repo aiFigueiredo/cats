@@ -1,0 +1,108 @@
+import XCTest
+@testable import gato
+
+final class BreedsFeatureTests: XCTestCase {
+    func testPaginationLoadsMultiplePages() {
+        var state = BreedsFeature.State()
+        state.pageSize = 20
+
+        let breeds = (0..<45).map { index in
+            Breed(
+                id: "id_\(index)",
+                name: "Breed \(index)",
+                origin: nil,
+                temperament: nil,
+                description: nil,
+                lifeSpan: nil,
+                imageURL: nil,
+                isFavorite: false
+            )
+        }
+
+        let deps = AppDependencies.mock
+        _ = BreedsFeature.reduce(state: &state, action: .cachedBreedsLoaded(breeds), dependencies: deps)
+
+        XCTAssertEqual(state.breeds.count, 20)
+        XCTAssertEqual(state.currentPage, 1)
+        XCTAssertTrue(state.canLoadMore)
+
+        _ = BreedsFeature.reduce(state: &state, action: .loadNextPage, dependencies: deps)
+
+        XCTAssertEqual(state.breeds.count, 40)
+        XCTAssertEqual(state.currentPage, 2)
+        XCTAssertTrue(state.canLoadMore)
+    }
+
+    func testSearchFilteringIsCaseInsensitive() {
+        var state = BreedsFeature.State()
+        let deps = AppDependencies.mock
+
+        _ = BreedsFeature.reduce(
+            state: &state,
+            action: .cachedBreedsLoaded([
+                Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false),
+                Breed(id: "2", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+            ]),
+            dependencies: deps
+        )
+
+        let effects = BreedsFeature.reduce(state: &state, action: .searchQueryChanged("ABY"), dependencies: deps)
+        let actions = awaitActions(effects)
+        for action in actions {
+            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        }
+
+        XCTAssertEqual(state.breeds.map(\.name), ["Abyssinian"])
+    }
+
+    func testFavoriteTogglePersistsBeforeStateUpdate() async {
+        var state = BreedsFeature.State()
+        state.allBreeds = [
+            Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        ]
+        state.filteredBreeds = state.allBreeds
+        state.breeds = state.allBreeds
+        state.currentPage = 1
+
+        var writeCount = 0
+        let deps = AppDependencies(
+            apiClient: .mock,
+            persistenceClient: .mock(
+                loadBreeds: { state.allBreeds },
+                setFavorite: { _, _ in writeCount += 1 }
+            ),
+            imageClient: .live
+        )
+
+        let effects = BreedsFeature.reduce(state: &state, action: .toggleFavoriteTapped("1"), dependencies: deps)
+        XCTAssertFalse(state.breeds[0].isFavorite)
+
+        let followUps = await effects.flatMapAsyncActions()
+        for action in followUps {
+            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        }
+
+        XCTAssertEqual(writeCount, 1)
+        XCTAssertTrue(state.breeds[0].isFavorite)
+    }
+
+    private func awaitActions(_ effects: [Effect<BreedsFeature.Action>]) -> [BreedsFeature.Action] {
+        let group = DispatchGroup()
+        var captured: [BreedsFeature.Action] = []
+        let lock = NSLock()
+
+        for effect in effects {
+            group.enter()
+            Task {
+                let actions = await effect.operation()
+                lock.lock()
+                captured.append(contentsOf: actions)
+                lock.unlock()
+                group.leave()
+            }
+        }
+
+        group.wait()
+        return captured
+    }
+}
