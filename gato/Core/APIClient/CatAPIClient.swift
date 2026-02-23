@@ -1,0 +1,174 @@
+import Foundation
+
+struct CatAPIClient {
+    var fetchBreeds: (_ page: Int, _ limit: Int) async throws -> [Breed]
+    var fetchBreedImage: (_ breedID: String) async throws -> URL?
+}
+
+enum CatAPIError: LocalizedError, Equatable {
+    case invalidURL
+    case unauthorized
+    case rateLimited
+    case offline
+    case invalidResponse
+    case decoding(String)
+    case unknown(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid API URL configuration."
+        case .unauthorized:
+            return "Unauthorized. Check your API key configuration."
+        case .rateLimited:
+            return "Rate-limited by The Cat API. Please try again later."
+        case .offline:
+            return "No internet connection."
+        case .invalidResponse:
+            return "Received an invalid response from the server."
+        case .decoding(let detail):
+            return "Failed to decode response: \(detail)"
+        case .unknown(let detail):
+            return detail
+        }
+    }
+}
+
+struct CatAPIConfiguration {
+    var baseURL: URL
+    var apiKey: String?
+
+    static var live: CatAPIConfiguration {
+        CatAPIConfiguration(
+            baseURL: URL(string: "https://api.thecatapi.com")!,
+            apiKey: ProcessInfo.processInfo.environment["CAT_API_KEY"]
+        )
+    }
+}
+
+extension CatAPIClient {
+    static func live(
+        session: URLSession = .shared,
+        configuration: CatAPIConfiguration = .live,
+        decoder: JSONDecoder = JSONDecoder()
+    ) -> CatAPIClient {
+        CatAPIClient(
+            fetchBreeds: { page, limit in
+                var components = URLComponents(url: configuration.baseURL.appending(path: "/v1/breeds"), resolvingAgainstBaseURL: false)
+                components?.queryItems = [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "limit", value: String(limit))
+                ]
+
+                guard let url = components?.url else {
+                    throw CatAPIError.invalidURL
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "GET"
+                if let apiKey = configuration.apiKey, !apiKey.isEmpty {
+                    request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                }
+
+                let (data, response) = try await session.data(for: request)
+                let httpResponse = try validate(response: response)
+
+                if httpResponse.statusCode == 204 {
+                    return []
+                }
+
+                do {
+                    let payload = try decoder.decode([BreedDTO].self, from: data)
+                    return payload.map { $0.toDomain() }
+                } catch {
+                    throw CatAPIError.decoding(error.localizedDescription)
+                }
+            },
+            fetchBreedImage: { breedID in
+                var components = URLComponents(url: configuration.baseURL.appending(path: "/v1/images/search"), resolvingAgainstBaseURL: false)
+                components?.queryItems = [
+                    URLQueryItem(name: "breed_ids", value: breedID),
+                    URLQueryItem(name: "limit", value: "1")
+                ]
+
+                guard let url = components?.url else {
+                    throw CatAPIError.invalidURL
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "GET"
+                if let apiKey = configuration.apiKey, !apiKey.isEmpty {
+                    request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                }
+
+                let (data, response) = try await session.data(for: request)
+                _ = try validate(response: response)
+
+                do {
+                    let payload = try decoder.decode([BreedImageDTO].self, from: data)
+                    return payload.first?.url
+                } catch {
+                    throw CatAPIError.decoding(error.localizedDescription)
+                }
+            }
+        )
+    }
+
+    static func validate(response: URLResponse) throws -> HTTPURLResponse {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw CatAPIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200 ... 299:
+            return httpResponse
+        case 401:
+            throw CatAPIError.unauthorized
+        case 429:
+            throw CatAPIError.rateLimited
+        default:
+            throw CatAPIError.unknown("Unexpected status code: \(httpResponse.statusCode)")
+        }
+    }
+}
+
+private struct BreedDTO: Decodable {
+    struct ImageDTO: Decodable {
+        let url: URL?
+    }
+
+    let id: String
+    let name: String
+    let origin: String?
+    let temperament: String?
+    let description: String?
+    let lifeSpan: String?
+    let image: ImageDTO?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case origin
+        case temperament
+        case description
+        case lifeSpan = "life_span"
+        case image
+    }
+
+    func toDomain() -> Breed {
+        Breed(
+            id: id,
+            name: name,
+            origin: origin,
+            temperament: temperament,
+            description: description,
+            lifeSpan: LifeSpanRange(rawValue: lifeSpan),
+            imageURL: image?.url,
+            isFavorite: false
+        )
+    }
+}
+
+private struct BreedImageDTO: Decodable {
+    let url: URL?
+}
