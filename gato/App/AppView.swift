@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppView: View {
     @ObservedObject var store: Store<AppFeature.State, AppFeature.Action>
+    @ObservedObject var breedsStore: Store<BreedsFeature.State, BreedsFeature.Action>
 
     var body: some View {
         TabView(selection: Binding(
@@ -9,7 +10,7 @@ struct AppView: View {
             set: { store.send(.selectTab($0)) }
         )) {
             NavigationStack {
-                BreedsView()
+                BreedsView(store: breedsStore)
             }
             .tabItem {
                 Label("Breeds", systemImage: "cat")

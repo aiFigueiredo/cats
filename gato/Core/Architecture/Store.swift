@@ -18,7 +18,8 @@ final class Store<State, Action>: ObservableObject {
         let effects = reducer(&state, action)
         for effect in effects {
             Task { @MainActor in
-                if let nextAction = await effect.operation() {
+                let actions = await effect.operation()
+                for nextAction in actions {
                     self.send(nextAction)
                 }
             }
@@ -27,17 +28,17 @@ final class Store<State, Action>: ObservableObject {
 }
 
 struct Effect<Action> {
-    let operation: () async -> Action?
+    let operation: () async -> [Action]
 
     static var none: Effect<Action> {
-        Effect<Action> { nil }
+        Effect<Action> { [] }
     }
 
     static func send(_ action: Action) -> Effect<Action> {
-        Effect<Action> { action }
+        Effect<Action> { [action] }
     }
 
-    static func run(_ operation: @escaping () async -> Action?) -> Effect<Action> {
+    static func run(_ operation: @escaping () async -> [Action]) -> Effect<Action> {
         Effect<Action>(operation: operation)
     }
 }

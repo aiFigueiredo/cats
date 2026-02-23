@@ -1,8 +1,122 @@
 import SwiftUI
 
 struct BreedsView: View {
+    @ObservedObject var store: Store<BreedsFeature.State, BreedsFeature.Action>
+
     var body: some View {
-        Text("Breeds")
-            .navigationTitle("Breeds")
+        Group {
+            if store.state.isLoading && store.state.breeds.isEmpty {
+                loadingView
+            } else if let errorMessage = store.state.errorMessage, store.state.breeds.isEmpty {
+                errorView(message: errorMessage)
+            } else if store.state.breeds.isEmpty {
+                emptyView
+            } else {
+                listView
+            }
+        }
+        .navigationTitle("Breeds")
+        .overlay(alignment: .top) {
+            if let banner = store.state.bannerMessage {
+                Text(banner)
+                    .font(.subheadline)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.top, 8)
+                    .accessibilityIdentifier("breeds_error_banner")
+                    .onTapGesture {
+                        store.send(.dismissBanner)
+                    }
+            }
+        }
+        .task {
+            store.send(.onAppear)
+        }
+    }
+
+    private var listView: some View {
+        List(store.state.breeds) { breed in
+            HStack(spacing: 12) {
+                AsyncImage(url: breed.imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        Image(systemName: "cat.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(10)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .background(Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                Text(breed.name)
+                    .font(.body)
+
+                Spacer()
+
+                Button {
+                    store.send(.toggleFavorite(breed.id))
+                } label: {
+                    Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
+                        .foregroundStyle(breed.isFavorite ? .red : .secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(breed.isFavorite ? "Remove favorite" : "Add favorite")
+                .accessibilityIdentifier("favorite_\(breed.id)")
+            }
+            .contentShape(Rectangle())
+        }
+        .listStyle(.plain)
+        .accessibilityIdentifier("breeds_list")
+    }
+
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+            Text("Loading breeds...")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func errorView(message: String) -> some View {
+        VStack(spacing: 16) {
+            Text("Could not load breeds")
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+            Button("Retry") {
+                store.send(.retryTapped)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("retry_button")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 16) {
+            Text("No breeds available")
+                .font(.headline)
+            Text("Pull to refresh or try again later.")
+                .foregroundStyle(.secondary)
+            Button("Retry") {
+                store.send(.retryTapped)
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
