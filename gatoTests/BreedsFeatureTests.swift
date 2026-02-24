@@ -86,6 +86,76 @@ final class BreedsFeatureTests: XCTestCase {
         XCTAssertTrue(state.breeds[0].isFavorite)
     }
 
+    func testOnAppearRefreshesFavoriteFlagsAfterExternalFavoriteRemoval() async {
+        var state = BreedsFeature.State()
+        state.hasLoaded = true
+        state.currentPage = 1
+        state.pageSize = 20
+        state.allBreeds = [
+            Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: true),
+            Breed(id: "birm", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        ]
+        state.filteredBreeds = state.allBreeds
+        state.breeds = state.allBreeds
+
+        let deps = AppDependencies(
+            apiClient: .mock,
+            persistenceClient: .mock(
+                loadFavoriteIDs: { [] }
+            ),
+            imageClient: .live
+        )
+
+        let effects = BreedsFeature.reduce(state: &state, action: .onAppear, dependencies: deps)
+        let followUps = await effects.flatMapAsyncActions()
+        for action in followUps {
+            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        }
+
+        XCTAssertFalse(state.breeds[0].isFavorite)
+        XCTAssertFalse(state.allBreeds[0].isFavorite)
+    }
+
+    func testBreedRowAppearHydratesMissingImageAndPersistsIt() async {
+        var state = BreedsFeature.State()
+        state.allBreeds = [
+            Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        ]
+        state.filteredBreeds = state.allBreeds
+        state.breeds = state.allBreeds
+        state.currentPage = 1
+
+        let expectedURL = URL(string: "https://cdn2.thecatapi.com/images/0XYvRd7oD.jpg")!
+        var persistedImage: (String, URL?)?
+
+        let deps = AppDependencies(
+            apiClient: CatAPIClient(
+                fetchBreeds: { _, _ in [] },
+                fetchBreedImage: { breedID in
+                    XCTAssertEqual(breedID, "abys")
+                    return expectedURL
+                }
+            ),
+            persistenceClient: .mock(
+                updateBreedImage: { breedID, imageURL in
+                    persistedImage = (breedID, imageURL)
+                }
+            ),
+            imageClient: .live
+        )
+
+        let effects = BreedsFeature.reduce(state: &state, action: .breedRowAppeared("abys"), dependencies: deps)
+        let followUps = await effects.flatMapAsyncActions()
+        for action in followUps {
+            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        }
+
+        XCTAssertEqual(state.allBreeds.first?.imageURL, expectedURL)
+        XCTAssertEqual(state.breeds.first?.imageURL, expectedURL)
+        XCTAssertEqual(persistedImage?.0, "abys")
+        XCTAssertEqual(persistedImage?.1, expectedURL)
+    }
+
     private func awaitActions(_ effects: [Effect<BreedsFeature.Action>]) -> [BreedsFeature.Action] {
         let group = DispatchGroup()
         var captured: [BreedsFeature.Action] = []

@@ -54,6 +54,39 @@ final class gatoUITests: XCTestCase {
     }
 
     @MainActor
+    func testBreedDetailFavoriteStateRefreshesAfterRemovingInFavoritesTab() throws {
+        let app = launchApp([
+            "UI_TEST_PRELOAD_CACHE": "1",
+            "UI_TEST_PRELOAD_FAVORITE_ID": "abys"
+        ])
+
+        XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
+        app.staticTexts["Abyssinian"].tap()
+
+        let detailFavoriteButton = app.buttons["detail_favorite_button"]
+        XCTAssertTrue(detailFavoriteButton.waitForExistence(timeout: 5))
+        XCTAssertEqual(detailFavoriteButton.label, "Remove from Favorites")
+
+        app.tabBars.buttons["Favorites"].tap()
+
+        let removeButton = app.buttons.matching(identifier: "remove_favorite_abys").firstMatch
+        XCTAssertTrue(removeButton.waitForExistence(timeout: 5))
+        removeButton.tap()
+
+        let removedFromFavoritesPredicate = NSPredicate(format: "exists == false")
+        expectation(for: removedFromFavoritesPredicate, evaluatedWith: removeButton)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.staticTexts["No favorites yet"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Breeds"].tap()
+        XCTAssertTrue(detailFavoriteButton.waitForExistence(timeout: 5))
+
+        let addToFavoritesPredicate = NSPredicate(format: "label == %@", "Add to Favorites")
+        expectation(for: addToFavoritesPredicate, evaluatedWith: detailFavoriteButton)
+        waitForExpectations(timeout: 5)
+    }
+
+    @MainActor
     private func launchApp(_ extraEnvironment: [String: String] = [:]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["UI_TEST_MODE"] = "1"

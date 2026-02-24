@@ -3,6 +3,7 @@ import SwiftUI
 struct BreedsView: View {
     @ObservedObject var store: Store<BreedsFeature.State, BreedsFeature.Action>
     let imageClient: ImageClient
+    let selectedTab: AppTab
 
     var body: some View {
         Group {
@@ -58,20 +59,12 @@ struct BreedsView: View {
 
             ForEach(store.state.breeds) { breed in
                 NavigationLink {
-                    if let currentBreed = store.state.allBreeds.first(where: { $0.id == breed.id }) {
-                        BreedDetailView(
-                            state: BreedDetailFeature.State(
-                                breed: currentBreed,
-                                isFavoriteToggleInFlight: store.state.favoriteToggleInFlight.contains(breed.id)
-                            ),
-                            imageClient: imageClient,
-                            onToggleFavorite: {
-                                store.send(.toggleFavoriteTapped(breed.id))
-                            }
-                        )
-                    } else {
-                        Text("Breed unavailable")
-                    }
+                    BreedDetailView(
+                        breedID: breed.id,
+                        breedsStore: store,
+                        imageClient: imageClient,
+                        selectedTab: selectedTab
+                    )
                 } label: {
                     HStack(spacing: 12) {
                         RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in

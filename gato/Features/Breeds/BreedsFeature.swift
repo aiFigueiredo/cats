@@ -32,6 +32,7 @@ struct BreedsFeature {
         case dismissBanner
         case toggleFavoriteTapped(String)
         case breedRowAppeared(String)
+        case favoriteFlagsRefreshed(Set<String>)
         case breedImageHydrated(String, URL?)
 
         case searchQueryChanged(String)
@@ -54,7 +55,9 @@ struct BreedsFeature {
     ) -> [Effect<Action>] {
         switch action {
         case .onAppear:
-            guard !state.hasLoaded else { return [] }
+            guard !state.hasLoaded else {
+                return [refreshFavoriteFlagsEffect(dependencies: dependencies)]
+            }
             state.hasLoaded = true
             state.isLoading = true
             state.errorMessage = nil
@@ -118,6 +121,10 @@ struct BreedsFeature {
             }
 
             return effects
+
+        case .favoriteFlagsRefreshed(let favoriteIDs):
+            setFavoriteFlags(state: &state, favoriteIDs: favoriteIDs)
+            return []
 
         case .breedImageHydrated(let breedID, let imageURL):
             state.imageHydrationInFlight.remove(breedID)
@@ -263,6 +270,18 @@ struct BreedsFeature {
             }
 
             return actions
+        }
+    }
+
+    private static func refreshFavoriteFlagsEffect(dependencies: AppDependencies) -> Effect<Action> {
+        Effect.run {
+            do {
+                let favoriteIDs = try dependencies.persistenceClient.loadFavoriteIDs()
+                return [.favoriteFlagsRefreshed(favoriteIDs)]
+            } catch {
+                AppLogger.ui.error("Favorite refresh failed: \(error.localizedDescription, privacy: .public)")
+                return []
+            }
         }
     }
 

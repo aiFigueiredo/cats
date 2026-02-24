@@ -15,7 +15,10 @@ final class Store<State, Action>: ObservableObject {
     }
 
     func send(_ action: Action) {
-        let effects = reducer(&state, action)
+        var updatedState = state
+        let effects = reducer(&updatedState, action)
+        state = updatedState
+
         for effect in effects {
             Task { @MainActor in
                 let actions = await effect.operation()
