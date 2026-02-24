@@ -19,12 +19,11 @@ struct BreedsFeatureTests {
                 temperament: nil,
                 description: nil,
                 lifeSpan: nil,
-                imageURL: nil,
+                imageURL: URL(string: "https://example.com/\(index).png"),
                 isFavorite: false
             )
         }
-
-        let sortedBreeds = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let sorted = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         let store = TestStore(initialState: initialState) {
             BreedsFeature()
@@ -34,18 +33,15 @@ struct BreedsFeatureTests {
         }
 
         await store.send(.cachedBreedsLoaded(breeds)) {
-            $0.allBreeds = sortedBreeds
-            $0.filteredBreeds = sortedBreeds
-            $0.breeds = Array(sortedBreeds.prefix(20))
-            $0.currentPage = 1
+            $0.breedsByID = Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) })
+            $0.orderedBreedIDs = sorted.map(\.id)
+            $0.filteredBreedIDs = sorted.map(\.id)
+            $0.visibleCount = 20
             $0.canLoadMore = true
         }
 
         await store.send(.loadNextPage) {
-            $0.isLoadingPage = true
-            $0.breeds = Array(sortedBreeds.prefix(40))
-            $0.isLoadingPage = false
-            $0.currentPage = 2
+            $0.visibleCount = 40
             $0.canLoadMore = true
         }
     }
@@ -53,8 +49,8 @@ struct BreedsFeatureTests {
     @Test("search filtering is case-insensitive")
     func searchFilteringIsCaseInsensitive() async {
         let breeds = [
-            Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false),
-            Breed(id: "2", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+            Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: URL(string: "https://example.com/1.png"), isFavorite: false),
+            Breed(id: "2", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: URL(string: "https://example.com/2.png"), isFavorite: false)
         ]
 
         var initialState = BreedsFeature.State()
@@ -68,10 +64,10 @@ struct BreedsFeatureTests {
         }
 
         await store.send(.cachedBreedsLoaded(breeds)) {
-            $0.allBreeds = breeds
-            $0.filteredBreeds = [breeds[0]]
-            $0.breeds = [breeds[0]]
-            $0.currentPage = 1
+            $0.breedsByID = Dictionary(uniqueKeysWithValues: breeds.map { ($0.id, $0) })
+            $0.orderedBreedIDs = breeds.map(\.id)
+            $0.filteredBreedIDs = ["1"]
+            $0.visibleCount = 1
             $0.canLoadMore = false
         }
     }
@@ -81,12 +77,13 @@ struct BreedsFeatureTests {
         let writeCount = LockedBox(0)
 
         var initialState = BreedsFeature.State()
-        initialState.allBreeds = [
-            Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        initialState.breedsByID = [
+            "1": Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        initialState.filteredBreeds = initialState.allBreeds
-        initialState.breeds = initialState.allBreeds
-        initialState.currentPage = 1
+        initialState.orderedBreedIDs = ["1"]
+        initialState.filteredBreedIDs = ["1"]
+        initialState.visibleCount = 1
+        initialState.canLoadMore = false
 
         let store = TestStore(initialState: initialState) {
             BreedsFeature()
@@ -105,9 +102,7 @@ struct BreedsFeatureTests {
 
         await store.receive(.favoritePersisted("1", true)) {
             $0.favoriteToggleInFlight = []
-            $0.allBreeds[0].isFavorite = true
-            $0.filteredBreeds[0].isFavorite = true
-            $0.breeds[0].isFavorite = true
+            $0.breedsByID["1"]?.isFavorite = true
         }
 
         #expect(writeCount.withValue { $0 } == 1)
@@ -117,14 +112,14 @@ struct BreedsFeatureTests {
     func onAppearRefreshesFavoriteFlagsAfterExternalFavoriteRemoval() async {
         var initialState = BreedsFeature.State()
         initialState.hasLoaded = true
-        initialState.currentPage = 1
-        initialState.pageSize = 20
-        initialState.allBreeds = [
-            Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: true),
-            Breed(id: "birm", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        initialState.breedsByID = [
+            "abys": Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: true),
+            "birm": Breed(id: "birm", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        initialState.filteredBreeds = initialState.allBreeds
-        initialState.breeds = initialState.allBreeds
+        initialState.orderedBreedIDs = ["abys", "birm"]
+        initialState.filteredBreedIDs = ["abys", "birm"]
+        initialState.visibleCount = 2
+        initialState.canLoadMore = false
 
         let store = TestStore(initialState: initialState) {
             BreedsFeature()
@@ -136,9 +131,7 @@ struct BreedsFeatureTests {
         await store.send(.onAppear)
 
         await store.receive(.favoriteFlagsRefreshed([])) {
-            $0.allBreeds[0].isFavorite = false
-            $0.filteredBreeds[0].isFavorite = false
-            $0.breeds[0].isFavorite = false
+            $0.breedsByID["abys"]?.isFavorite = false
         }
     }
 
@@ -148,12 +141,12 @@ struct BreedsFeatureTests {
         let persistedImage = LockedBox<(String, URL?)?>(nil)
 
         var initialState = BreedsFeature.State()
-        initialState.allBreeds = [
-            Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        initialState.breedsByID = [
+            "abys": Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        initialState.filteredBreeds = initialState.allBreeds
-        initialState.breeds = initialState.allBreeds
-        initialState.currentPage = 1
+        initialState.orderedBreedIDs = ["abys"]
+        initialState.filteredBreedIDs = ["abys"]
+        initialState.visibleCount = 1
 
         let store = TestStore(initialState: initialState) {
             BreedsFeature()
@@ -178,9 +171,7 @@ struct BreedsFeatureTests {
 
         await store.receive(.breedImageHydrated("abys", expectedURL)) {
             $0.imageHydrationInFlight = []
-            $0.allBreeds[0].imageURL = expectedURL
-            $0.filteredBreeds[0].imageURL = expectedURL
-            $0.breeds[0].imageURL = expectedURL
+            $0.breedsByID["abys"]?.imageURL = expectedURL
         }
 
         let saved = persistedImage.withValue { $0 }
