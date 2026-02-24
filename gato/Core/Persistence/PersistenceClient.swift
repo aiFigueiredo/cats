@@ -54,7 +54,9 @@ extension PersistenceClient {
                             managed.breedDescription = breed.description
                             managed.lifeSpanMin = breed.lifeSpan.map { NSNumber(value: $0.min) }
                             managed.lifeSpanMax = breed.lifeSpan.map { NSNumber(value: $0.max) }
-                            managed.imageURL = breed.imageURL?.absoluteString
+                            if let imageURL = breed.imageURL?.absoluteString {
+                                managed.imageURL = imageURL
+                            }
                             managed.lastUpdatedAt = now
                         }
 

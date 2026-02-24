@@ -117,6 +117,12 @@ struct BreedsView: View {
         }
         .listStyle(.plain)
         .accessibilityIdentifier("breeds_list")
+        .onAppear {
+            prefetchVisibleBreedsForImageHydration()
+        }
+        .onChange(of: store.breeds.map(\.id)) { _, _ in
+            prefetchVisibleBreedsForImageHydration()
+        }
     }
 
     private var loadingView: some View {
@@ -179,5 +185,11 @@ struct BreedsView: View {
             .accessibilityIdentifier("retry_button")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func prefetchVisibleBreedsForImageHydration() {
+        for breed in store.breeds.prefix(12) {
+            store.send(.breedRowAppeared(breed.id))
+        }
     }
 }

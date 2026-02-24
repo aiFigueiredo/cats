@@ -32,15 +32,10 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
                 placeholder()
             }
         }
-        .onAppear {
+        .task(id: url) {
+            cancelLoading()
+            image = nil
             startLoading(for: url)
-        }
-        .onChange(of: url) { _, newURL in
-            if newURL != activeURL {
-                cancelLoading()
-                image = nil
-                startLoading(for: newURL)
-            }
         }
         .onDisappear {
             cancelLoading()
