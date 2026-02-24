@@ -1,24 +1,28 @@
-import XCTest
+import Testing
 @testable import gato
 
-final class LifeSpanRangeTests: XCTestCase {
-    func testParsesRangeString() {
+@Suite("LifeSpanRange")
+struct LifeSpanRangeTests {
+    @Test("parses range string")
+    func parsesRangeString() {
         let range = LifeSpanRange(rawValue: "10 - 14")
 
-        XCTAssertEqual(range?.min, 10)
-        XCTAssertEqual(range?.max, 14)
+        #expect(range?.min == 10)
+        #expect(range?.max == 14)
     }
 
-    func testParsesSingleValueRange() {
+    @Test("parses single value range")
+    func parsesSingleValueRange() {
         let range = LifeSpanRange(rawValue: "12")
 
-        XCTAssertEqual(range?.min, 12)
-        XCTAssertEqual(range?.max, 12)
+        #expect(range?.min == 12)
+        #expect(range?.max == 12)
     }
 
-    func testInvalidRangeReturnsNil() {
-        XCTAssertNil(LifeSpanRange(rawValue: nil))
-        XCTAssertNil(LifeSpanRange(rawValue: ""))
-        XCTAssertNil(LifeSpanRange(rawValue: "unknown"))
+    @Test("invalid range returns nil")
+    func invalidRangeReturnsNil() {
+        #expect(LifeSpanRange(rawValue: nil) == nil)
+        #expect(LifeSpanRange(rawValue: "") == nil)
+        #expect(LifeSpanRange(rawValue: "unknown") == nil)
     }
 }

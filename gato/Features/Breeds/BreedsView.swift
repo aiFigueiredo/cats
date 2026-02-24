@@ -1,19 +1,20 @@
+import ComposableArchitecture
 import SwiftUI
 
 struct BreedsView: View {
-    @ObservedObject var store: Store<BreedsFeature.State, BreedsFeature.Action>
+    let store: StoreOf<BreedsFeature>
     let imageClient: ImageClient
     let selectedTab: AppTab
 
     var body: some View {
         Group {
-            if store.state.isLoading && store.state.breeds.isEmpty {
+            if store.isLoading && store.breeds.isEmpty {
                 loadingView
-            } else if store.state.showFatalOfflineState {
+            } else if store.showFatalOfflineState {
                 fatalOfflineView
-            } else if let errorMessage = store.state.errorMessage, store.state.breeds.isEmpty {
+            } else if let errorMessage = store.errorMessage, store.breeds.isEmpty {
                 errorView(message: errorMessage)
-            } else if store.state.breeds.isEmpty {
+            } else if store.breeds.isEmpty {
                 emptyView
             } else {
                 listView
@@ -22,14 +23,14 @@ struct BreedsView: View {
         .navigationTitle("Breeds")
         .searchable(
             text: Binding(
-                get: { store.state.searchQuery },
+                get: { store.searchQuery },
                 set: { store.send(.searchQueryChanged($0)) }
             ),
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Search breeds"
         )
         .overlay(alignment: .top) {
-            if let banner = store.state.bannerMessage {
+            if let banner = store.bannerMessage {
                 Text(banner)
                     .font(.subheadline)
                     .padding(.horizontal, 12)
@@ -50,14 +51,14 @@ struct BreedsView: View {
 
     private var listView: some View {
         List {
-            if store.state.isOfflineMode {
+            if store.isOfflineMode {
                 Text("Offline mode: showing cached data.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("offline_banner")
             }
 
-            ForEach(store.state.breeds) { breed in
+            ForEach(store.breeds) { breed in
                 NavigationLink {
                     BreedDetailView(
                         breedID: breed.id,
@@ -97,7 +98,7 @@ struct BreedsView: View {
                         .buttonStyle(.borderless)
                         .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
                         .accessibilityIdentifier("favorite_\(breed.id)")
-                        .disabled(store.state.favoriteToggleInFlight.contains(breed.id))
+                        .disabled(store.favoriteToggleInFlight.contains(breed.id))
                     }
                 }
                 .contentShape(Rectangle())
@@ -106,7 +107,7 @@ struct BreedsView: View {
                 }
             }
 
-            if store.state.isLoadingPage {
+            if store.isLoadingPage {
                 HStack {
                     Spacer()
                     ProgressView()

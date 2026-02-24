@@ -1,15 +1,16 @@
 # Gato: Cat Breeds iOS App
 
-`Gato` is a SwiftUI iOS app with a TCA-style reducer/store architecture. It loads breeds from [The Cat API](https://thecatapi.com/), supports search and favorites, and keeps working with cached data offline.
+`Gato` is a SwiftUI iOS app built with The Composable Architecture (TCA). It loads breeds from [The Cat API](https://thecatapi.com/), supports search and favorites, and keeps working with cached data offline.
 
 ## Stack
 
 - `SwiftUI`
-- Feature reducers + lightweight `Store` (`TCA`-inspired)
+- `ComposableArchitecture` (`@Reducer`, `StoreOf`, `TestStore`)
 - `Core Data` persistence
 - `URLSession` API/image networking
 - `OSLog` categories: `api`, `persistence`, `ui`
-- `XCTest` + `XCUITest`
+- `Swift Testing` + `TestStore` for unit/integration tests
+- `XCUITest` (`XCTest`) for UI automation
 
 ## Current Architecture
 
@@ -135,13 +136,11 @@ The app reads `CAT_API_KEY` from:
 
 ## Tradeoffs
 
-- Uses a custom lightweight store instead of importing Point-Free TCA package.
 - Uses Core Data instead of SwiftData in this environment.
 - Local pagination favors determinism/offline over remote paging fidelity.
 
 ## Future Improvements
 
-1. Migrate to upstream TCA package.
-2. Add snapshot tests for key UI states.
-3. Add pull-to-refresh/background refresh.
-4. Split features/core into local Swift packages.
+1. Add snapshot tests for key UI states.
+2. Add pull-to-refresh/background refresh.
+3. Split features/core into local Swift packages.

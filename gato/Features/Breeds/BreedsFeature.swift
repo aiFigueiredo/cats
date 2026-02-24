@@ -1,8 +1,11 @@
+import ComposableArchitecture
 import Foundation
 import OSLog
 
+@Reducer
 struct BreedsFeature {
-    struct State {
+    @ObservableState
+    struct State: Equatable {
         var allBreeds: [Breed] = []
         var filteredBreeds: [Breed] = []
         var breeds: [Breed] = []
@@ -20,13 +23,12 @@ struct BreedsFeature {
         var canLoadMore = false
 
         var searchQuery = ""
-        var searchToken = UUID()
 
         var favoriteToggleInFlight: Set<String> = []
         var imageHydrationInFlight: Set<String> = []
     }
 
-    enum Action {
+    enum Action: Equatable {
         case onAppear
         case retryTapped
         case dismissBanner
@@ -36,7 +38,7 @@ struct BreedsFeature {
         case breedImageHydrated(String, URL?)
 
         case searchQueryChanged(String)
-        case applySearchDebounced(UUID)
+        case applySearchDebounced
 
         case cachedBreedsLoaded([Breed])
         case networkBreedsLoaded([Breed])
@@ -48,164 +50,219 @@ struct BreedsFeature {
         case loadNextPage
     }
 
-    static func reduce(
-        state: inout State,
-        action: Action,
-        dependencies: AppDependencies
-    ) -> [Effect<Action>] {
-        switch action {
-        case .onAppear:
-            guard !state.hasLoaded else {
-                return [refreshFavoriteFlagsEffect(dependencies: dependencies)]
-            }
-            state.hasLoaded = true
-            state.isLoading = true
-            state.errorMessage = nil
-            state.showFatalOfflineState = false
-            return [loadBreedsEffect(dependencies: dependencies)]
+    @Dependency(\.apiClient) var apiClient
+    @Dependency(\.persistenceClient) var persistenceClient
+    @Dependency(\.continuousClock) var clock
 
-        case .retryTapped:
-            state.isLoading = true
-            state.errorMessage = nil
-            state.showFatalOfflineState = false
-            return [loadBreedsEffect(dependencies: dependencies)]
+    var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .onAppear:
+                guard !state.hasLoaded else {
+                    return refreshFavoriteFlagsEffect()
+                }
+                state.hasLoaded = true
+                state.isLoading = true
+                state.errorMessage = nil
+                state.showFatalOfflineState = false
+                return loadBreedsEffect()
 
-        case .dismissBanner:
-            state.bannerMessage = nil
-            return []
+            case .retryTapped:
+                state.isLoading = true
+                state.errorMessage = nil
+                state.showFatalOfflineState = false
+                return loadBreedsEffect()
 
-        case .toggleFavoriteTapped(let breedID):
-            guard !state.favoriteToggleInFlight.contains(breedID) else { return [] }
-            guard let existing = state.allBreeds.first(where: { $0.id == breedID }) else { return [] }
+            case .dismissBanner:
+                state.bannerMessage = nil
+                return .none
 
-            state.favoriteToggleInFlight.insert(breedID)
-            let nextValue = !existing.isFavorite
+            case .toggleFavoriteTapped(let breedID):
+                guard !state.favoriteToggleInFlight.contains(breedID) else { return .none }
+                guard let existing = state.allBreeds.first(where: { $0.id == breedID }) else { return .none }
 
-            return [
-                .run {
+                state.favoriteToggleInFlight.insert(breedID)
+                let nextValue = !existing.isFavorite
+                let persistenceClient = self.persistenceClient
+
+                return .run { send in
                     do {
-                        try dependencies.persistenceClient.setFavorite(breedID, nextValue)
-                        return [.favoritePersisted(breedID, nextValue)]
+                        try persistenceClient.setFavorite(breedID, nextValue)
+                        await send(.favoritePersisted(breedID, nextValue))
                     } catch {
                         let message = (error as? LocalizedError)?.errorDescription ?? "Failed to update favorite."
-                        return [.favoritePersistFailed(breedID, message)]
+                        await send(.favoritePersistFailed(breedID, message))
                     }
                 }
-            ]
 
-        case .favoritePersisted(let breedID, let isFavorite):
-            state.favoriteToggleInFlight.remove(breedID)
-            setFavorite(state: &state, breedID: breedID, isFavorite: isFavorite)
-            return []
+            case .favoritePersisted(let breedID, let isFavorite):
+                state.favoriteToggleInFlight.remove(breedID)
+                setFavorite(state: &state, breedID: breedID, isFavorite: isFavorite)
+                return .none
 
-        case .favoritePersistFailed(let breedID, let message):
-            state.favoriteToggleInFlight.remove(breedID)
-            state.bannerMessage = message
-            return []
+            case .favoritePersistFailed(let breedID, let message):
+                state.favoriteToggleInFlight.remove(breedID)
+                state.bannerMessage = message
+                return .none
 
-        case .breedRowAppeared(let breedID):
-            var effects: [Effect<Action>] = []
+            case .breedRowAppeared(let breedID):
+                var effects: [Effect<Action>] = []
 
-            if state.canLoadMore, !state.isLoadingPage, let index = state.breeds.firstIndex(where: { $0.id == breedID }) {
-                let thresholdIndex = max(state.breeds.count - 5, 0)
-                if index >= thresholdIndex {
-                    effects.append(.send(.loadNextPage))
+                if state.canLoadMore, !state.isLoadingPage, let index = state.breeds.firstIndex(where: { $0.id == breedID }) {
+                    let thresholdIndex = max(state.breeds.count - 5, 0)
+                    if index >= thresholdIndex {
+                        effects.append(.send(.loadNextPage))
+                    }
                 }
-            }
 
-            if let breed = state.allBreeds.first(where: { $0.id == breedID }),
-               breed.imageURL == nil,
-               !state.imageHydrationInFlight.contains(breedID) {
-                state.imageHydrationInFlight.insert(breedID)
-                effects.append(hydrateBreedImageEffect(breedID: breedID, dependencies: dependencies))
-            }
-
-            return effects
-
-        case .favoriteFlagsRefreshed(let favoriteIDs):
-            setFavoriteFlags(state: &state, favoriteIDs: favoriteIDs)
-            return []
-
-        case .breedImageHydrated(let breedID, let imageURL):
-            state.imageHydrationInFlight.remove(breedID)
-            guard let imageURL else { return [] }
-            setBreedImage(state: &state, breedID: breedID, imageURL: imageURL)
-            return []
-
-        case .searchQueryChanged(let query):
-            state.searchQuery = query
-            let token = UUID()
-            state.searchToken = token
-            return [
-                .run {
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    return [.applySearchDebounced(token)]
+                if let breed = state.allBreeds.first(where: { $0.id == breedID }),
+                   breed.imageURL == nil,
+                   !state.imageHydrationInFlight.contains(breedID) {
+                    state.imageHydrationInFlight.insert(breedID)
+                    effects.append(hydrateBreedImageEffect(breedID: breedID))
                 }
-            ]
 
-        case .applySearchDebounced(let token):
-            guard token == state.searchToken else { return [] }
-            recomputeFilter(state: &state, resetPagination: true)
-            return []
+                return .merge(effects)
 
-        case .cachedBreedsLoaded(let breeds):
-            applyLoadedBreeds(state: &state, breeds: breeds)
-            return []
+            case .favoriteFlagsRefreshed(let favoriteIDs):
+                setFavoriteFlags(state: &state, favoriteIDs: favoriteIDs)
+                return .none
 
-        case .networkBreedsLoaded(let breeds):
-            state.isLoading = false
-            state.isOfflineMode = false
-            state.showFatalOfflineState = false
-            applyLoadedBreeds(state: &state, breeds: breeds)
-            return []
+            case .breedImageHydrated(let breedID, let imageURL):
+                state.imageHydrationInFlight.remove(breedID)
+                guard let imageURL else { return .none }
+                setBreedImage(state: &state, breedID: breedID, imageURL: imageURL)
+                return .none
 
-        case .networkFailed(let message, let isOffline):
-            state.isLoading = false
-            if state.breeds.isEmpty {
-                state.errorMessage = message
-                state.showFatalOfflineState = isOffline
-            } else {
-                state.bannerMessage = isOffline ? "Offline mode: showing cached data." : message
-                state.isOfflineMode = isOffline
+            case .searchQueryChanged(let query):
+                state.searchQuery = query
+                return .run { send in
+                    try await self.clock.sleep(for: .milliseconds(300))
+                    await send(.applySearchDebounced)
+                }
+                .cancellable(id: "breeds-search-debounce", cancelInFlight: true)
+
+            case .applySearchDebounced:
+                recomputeFilter(state: &state, resetPagination: true)
+                return .none
+
+            case .cachedBreedsLoaded(let breeds):
+                applyLoadedBreeds(state: &state, breeds: breeds)
+                return .none
+
+            case .networkBreedsLoaded(let breeds):
+                state.isLoading = false
+                state.isOfflineMode = false
+                state.showFatalOfflineState = false
+                applyLoadedBreeds(state: &state, breeds: breeds)
+                return .none
+
+            case .networkFailed(let message, let isOffline):
+                state.isLoading = false
+                if state.breeds.isEmpty {
+                    state.errorMessage = message
+                    state.showFatalOfflineState = isOffline
+                } else {
+                    state.bannerMessage = isOffline ? "Offline mode: showing cached data." : message
+                    state.isOfflineMode = isOffline
+                }
+                AppLogger.ui.error("Breeds sync failed: \(message, privacy: .public)")
+                return .none
+
+            case .loadNextPage:
+                state.isLoadingPage = true
+                appendNextPage(state: &state)
+                state.isLoadingPage = false
+                return .none
             }
-            AppLogger.ui.error("Breeds sync failed: \(message, privacy: .public)")
-            return []
-
-        case .loadNextPage:
-            state.isLoadingPage = true
-            appendNextPage(state: &state)
-            state.isLoadingPage = false
-            return []
         }
     }
 
-    private static func applyLoadedBreeds(state: inout State, breeds: [Breed]) {
+    private func loadBreedsEffect() -> Effect<Action> {
+        let persistenceClient = self.persistenceClient
+        let apiClient = self.apiClient
+
+        return .run { send in
+            do {
+                let cached = try persistenceClient.loadBreeds()
+                if !cached.isEmpty {
+                    await send(.cachedBreedsLoaded(cached))
+                }
+            } catch {
+                // Ignore cache errors and continue with network.
+            }
+
+            do {
+                let remote = try await fetchAllBreeds(apiClient: apiClient)
+                try persistenceClient.upsertBreeds(remote, Date())
+                let merged = try persistenceClient.loadBreeds()
+                await send(.networkBreedsLoaded(merged))
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? "Failed to refresh breeds."
+                let isOffline = (error as? CatAPIError) == .offline
+                await send(.networkFailed(message, isOffline))
+            }
+        }
+    }
+
+    private func refreshFavoriteFlagsEffect() -> Effect<Action> {
+        let persistenceClient = self.persistenceClient
+
+        return .run { send in
+            do {
+                let favoriteIDs = try persistenceClient.loadFavoriteIDs()
+                await send(.favoriteFlagsRefreshed(favoriteIDs))
+            } catch {
+                AppLogger.ui.error("Favorite refresh failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func hydrateBreedImageEffect(breedID: String) -> Effect<Action> {
+        let apiClient = self.apiClient
+        let persistenceClient = self.persistenceClient
+
+        return .run { send in
+            do {
+                let imageURL = try await apiClient.fetchBreedImage(breedID)
+                if let imageURL {
+                    try? persistenceClient.updateBreedImage(breedID, imageURL)
+                }
+                await send(.breedImageHydrated(breedID, imageURL))
+            } catch {
+                AppLogger.api.error("Image hydration failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                await send(.breedImageHydrated(breedID, nil))
+            }
+        }
+    }
+
+    private func applyLoadedBreeds(state: inout State, breeds: [Breed]) {
         state.allBreeds = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         recomputeFilter(state: &state, resetPagination: true)
     }
 
-    private static func setFavorite(state: inout State, breedID: String, isFavorite: Bool) {
+    private func setFavorite(state: inout State, breedID: String, isFavorite: Bool) {
         if let index = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
             state.allBreeds[index].isFavorite = isFavorite
         }
         recomputeFilter(state: &state, resetPagination: false)
     }
 
-    private static func setBreedImage(state: inout State, breedID: String, imageURL: URL) {
+    private func setBreedImage(state: inout State, breedID: String, imageURL: URL) {
         if let index = state.allBreeds.firstIndex(where: { $0.id == breedID }) {
             state.allBreeds[index].imageURL = imageURL
         }
         recomputeFilter(state: &state, resetPagination: false)
     }
 
-    private static func setFavoriteFlags(state: inout State, favoriteIDs: Set<String>) {
+    private func setFavoriteFlags(state: inout State, favoriteIDs: Set<String>) {
         for index in state.allBreeds.indices {
             state.allBreeds[index].isFavorite = favoriteIDs.contains(state.allBreeds[index].id)
         }
         recomputeFilter(state: &state, resetPagination: false)
     }
 
-    private static func recomputeFilter(state: inout State, resetPagination: Bool) {
+    private func recomputeFilter(state: inout State, resetPagination: Bool) {
         let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty {
             state.filteredBreeds = state.allBreeds
@@ -226,7 +283,7 @@ struct BreedsFeature {
         }
     }
 
-    private static func appendNextPage(state: inout State) {
+    private func appendNextPage(state: inout State) {
         guard !state.filteredBreeds.isEmpty else {
             state.breeds = []
             state.canLoadMore = false
@@ -245,62 +302,7 @@ struct BreedsFeature {
         state.canLoadMore = state.breeds.count < state.filteredBreeds.count
     }
 
-    private static func loadBreedsEffect(dependencies: AppDependencies) -> Effect<Action> {
-        Effect.run {
-            var actions: [Action] = []
-
-            do {
-                let cached = try dependencies.persistenceClient.loadBreeds()
-                if !cached.isEmpty {
-                    actions.append(.cachedBreedsLoaded(cached))
-                }
-            } catch {
-                // Ignore cache errors and continue with network.
-            }
-
-            do {
-                let remote = try await fetchAllBreeds(apiClient: dependencies.apiClient)
-                try dependencies.persistenceClient.upsertBreeds(remote, Date())
-                let merged = try dependencies.persistenceClient.loadBreeds()
-                actions.append(.networkBreedsLoaded(merged))
-            } catch {
-                let message = (error as? LocalizedError)?.errorDescription ?? "Failed to refresh breeds."
-                let isOffline = (error as? CatAPIError) == .offline
-                actions.append(.networkFailed(message, isOffline))
-            }
-
-            return actions
-        }
-    }
-
-    private static func refreshFavoriteFlagsEffect(dependencies: AppDependencies) -> Effect<Action> {
-        Effect.run {
-            do {
-                let favoriteIDs = try dependencies.persistenceClient.loadFavoriteIDs()
-                return [.favoriteFlagsRefreshed(favoriteIDs)]
-            } catch {
-                AppLogger.ui.error("Favorite refresh failed: \(error.localizedDescription, privacy: .public)")
-                return []
-            }
-        }
-    }
-
-    private static func hydrateBreedImageEffect(breedID: String, dependencies: AppDependencies) -> Effect<Action> {
-        Effect.run {
-            do {
-                let imageURL = try await dependencies.apiClient.fetchBreedImage(breedID)
-                if let imageURL {
-                    try? dependencies.persistenceClient.updateBreedImage(breedID, imageURL)
-                }
-                return [.breedImageHydrated(breedID, imageURL)]
-            } catch {
-                AppLogger.api.error("Image hydration failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                return [.breedImageHydrated(breedID, nil)]
-            }
-        }
-    }
-
-    private static func fetchAllBreeds(apiClient: CatAPIClient) async throws -> [Breed] {
+    private func fetchAllBreeds(apiClient: CatAPIClient) async throws -> [Breed] {
         let perPage = 50
         var page = 0
         var allBreeds: [Breed] = []

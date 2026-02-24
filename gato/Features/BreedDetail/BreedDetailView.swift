@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import SwiftUI
 
 struct BreedDetailView: View {
@@ -5,7 +6,7 @@ struct BreedDetailView: View {
 
     init(
         breedID: String,
-        breedsStore: Store<BreedsFeature.State, BreedsFeature.Action>,
+        breedsStore: StoreOf<BreedsFeature>,
         imageClient: ImageClient,
         selectedTab: AppTab
     ) {
@@ -39,6 +40,7 @@ struct BreedDetailView: View {
                 imageClient: imageClient,
                 selectedTab: selectedTab
             )
+
         case let .standalone(state, imageClient, onToggleFavorite):
             breedDetailBody(
                 state: state,
@@ -53,10 +55,11 @@ private extension BreedDetailView {
     enum Source {
         case breeds(
             breedID: String,
-            breedsStore: Store<BreedsFeature.State, BreedsFeature.Action>,
+            breedsStore: StoreOf<BreedsFeature>,
             imageClient: ImageClient,
             selectedTab: AppTab
         )
+
         case standalone(
             state: BreedDetailFeature.State,
             imageClient: ImageClient,
@@ -67,17 +70,17 @@ private extension BreedDetailView {
 
 private struct BreedDetailContentView: View {
     let breedID: String
-    @ObservedObject var breedsStore: Store<BreedsFeature.State, BreedsFeature.Action>
+    let breedsStore: StoreOf<BreedsFeature>
     let imageClient: ImageClient
     let selectedTab: AppTab
 
     var body: some View {
         Group {
-            if let breed = breedsStore.state.allBreeds.first(where: { $0.id == breedID }) {
+            if let breed = breedsStore.allBreeds.first(where: { $0.id == breedID }) {
                 breedDetailBody(
                     state: BreedDetailFeature.State(
                         breed: breed,
-                        isFavoriteToggleInFlight: breedsStore.state.favoriteToggleInFlight.contains(breedID)
+                        isFavoriteToggleInFlight: breedsStore.favoriteToggleInFlight.contains(breedID)
                     ),
                     imageClient: imageClient,
                     onToggleFavorite: {

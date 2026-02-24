@@ -1,19 +1,14 @@
+import Testing
 import UIKit
-import XCTest
 @testable import gato
 
-final class ImageLoadServiceTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
+@Suite("ImageLoadService", .serialized)
+struct ImageLoadServiceTests {
+    @Test("concurrent loads for same URL are deduplicated")
+    func concurrentLoadsForSameURLAreDeduplicated() async throws {
         MockImageURLProtocol.reset()
-    }
+        defer { MockImageURLProtocol.reset() }
 
-    override func tearDown() {
-        MockImageURLProtocol.reset()
-        super.tearDown()
-    }
-
-    func testConcurrentLoadsForSameURLAreDeduplicated() async throws {
         let imageData = makeTestImageData()
         MockImageURLProtocol.handler = { request in
             MockImageURLProtocol.requestCount += 1
@@ -32,20 +27,24 @@ final class ImageLoadServiceTests: XCTestCase {
         async let second = service.loadImage(for: url)
         _ = try await (first, second)
 
-        XCTAssertEqual(MockImageURLProtocol.requestCount, 1)
+        #expect(MockImageURLProtocol.requestCount == 1)
     }
 
-    func testCancelsDownloadWhenLastSubscriberCancels() async throws {
-        let started = expectation(description: "request started")
-        let stopped = expectation(description: "request cancelled by URLSession")
+    @Test("cancels download when last subscriber cancels")
+    func cancelsDownloadWhenLastSubscriberCancels() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
+        let started = LockedBox(false)
+        let stopped = LockedBox(false)
         let imageData = makeTestImageData()
 
         MockImageURLProtocol.onStopLoading = {
-            stopped.fulfill()
+            stopped.withValue { $0 = true }
         }
         MockImageURLProtocol.handler = { request in
             MockImageURLProtocol.requestCount += 1
-            started.fulfill()
+            started.withValue { $0 = true }
             try await Task.sleep(nanoseconds: 2_000_000_000)
             try Task.checkCancellation()
             guard let url = request.url else { throw URLError(.badURL) }
@@ -61,20 +60,24 @@ final class ImageLoadServiceTests: XCTestCase {
             try await service.loadImage(for: url)
         }
 
-        await fulfillment(of: [started], timeout: 1)
+        #expect(await waitForFlag(started))
         await service.cancel(subscription, for: url)
-        await fulfillment(of: [stopped], timeout: 1)
+        #expect(await waitForFlag(stopped))
 
         do {
             _ = try await loadTask.value
-            XCTFail("Expected image load to be canceled")
+            Issue.record("Expected image load to be canceled")
         } catch {
             let isCancellation = error is CancellationError || (error as NSError).code == NSURLErrorCancelled
-            XCTAssertTrue(isCancellation)
+            #expect(isCancellation)
         }
     }
 
-    func testCancelOneSubscriberDoesNotCancelSharedRequest() async throws {
+    @Test("cancel one subscriber does not cancel shared request")
+    func cancelOneSubscriberDoesNotCancelSharedRequest() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
         let imageData = makeTestImageData()
 
         MockImageURLProtocol.handler = { request in
@@ -96,10 +99,14 @@ final class ImageLoadServiceTests: XCTestCase {
         await service.cancel(firstSubscription, for: url)
 
         _ = try await (first, second)
-        XCTAssertEqual(MockImageURLProtocol.requestCount, 1)
+        #expect(MockImageURLProtocol.requestCount == 1)
     }
 
-    func testSecondLoadUsesMemoryCache() async throws {
+    @Test("second load uses memory cache")
+    func secondLoadUsesMemoryCache() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
         let imageData = makeTestImageData()
 
         MockImageURLProtocol.handler = { request in
@@ -117,10 +124,14 @@ final class ImageLoadServiceTests: XCTestCase {
         _ = await service.subscribe(url)
         _ = try await service.loadImage(for: url)
 
-        XCTAssertEqual(MockImageURLProtocol.requestCount, 1)
+        #expect(MockImageURLProtocol.requestCount == 1)
     }
 
-    func testDecodeFailureThrowsError() async throws {
+    @Test("decode failure throws error")
+    func decodeFailureThrowsError() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
         MockImageURLProtocol.handler = { request in
             MockImageURLProtocol.requestCount += 1
             guard let url = request.url else { throw URLError(.badURL) }
@@ -135,15 +146,19 @@ final class ImageLoadServiceTests: XCTestCase {
 
         do {
             _ = try await service.loadImage(for: url)
-            XCTFail("Expected decode failure")
+            Issue.record("Expected decode failure")
         } catch let error as ImageLoadServiceError {
-            XCTAssertEqual(error, .decodeFailed)
+            #expect(error == .decodeFailed)
         } catch {
-            XCTFail("Unexpected error \(error)")
+            Issue.record("Unexpected error \(error)")
         }
     }
 
-    func testNon2xxResponseThrowsInvalidResponse() async throws {
+    @Test("non 2xx response throws invalid response")
+    func non2xxResponseThrowsInvalidResponse() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
         MockImageURLProtocol.handler = { request in
             MockImageURLProtocol.requestCount += 1
             guard let url = request.url else { throw URLError(.badURL) }
@@ -158,15 +173,19 @@ final class ImageLoadServiceTests: XCTestCase {
 
         do {
             _ = try await service.loadImage(for: url)
-            XCTFail("Expected invalid response error")
+            Issue.record("Expected invalid response error")
         } catch let error as ImageLoadServiceError {
-            XCTAssertEqual(error, .invalidResponse)
+            #expect(error == .invalidResponse)
         } catch {
-            XCTFail("Unexpected error \(error)")
+            Issue.record("Unexpected error \(error)")
         }
     }
 
-    func testFailedLoadCanRetrySuccessfully() async throws {
+    @Test("failed load can retry successfully")
+    func failedLoadCanRetrySuccessfully() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
         let imageData = makeTestImageData()
         let service = ImageLoadService(session: makeSession())
         let url = URL(string: "https://example.com/retry.png")!
@@ -181,11 +200,11 @@ final class ImageLoadServiceTests: XCTestCase {
         _ = await service.subscribe(url)
         do {
             _ = try await service.loadImage(for: url)
-            XCTFail("Expected first request to fail")
+            Issue.record("Expected first request to fail")
         } catch let error as ImageLoadServiceError {
-            XCTAssertEqual(error, .invalidResponse)
+            #expect(error == .invalidResponse)
         } catch {
-            XCTFail("Unexpected first error \(error)")
+            Issue.record("Unexpected first error \(error)")
         }
 
         MockImageURLProtocol.handler = { request in
@@ -198,21 +217,25 @@ final class ImageLoadServiceTests: XCTestCase {
         _ = await service.subscribe(url)
         let retriedImage = try await service.loadImage(for: url)
 
-        XCTAssertNotNil(retriedImage.pngData())
-        XCTAssertEqual(MockImageURLProtocol.requestCount, 2)
+        #expect(retriedImage.pngData() != nil)
+        #expect(MockImageURLProtocol.requestCount == 2)
     }
 
-    func testCancelResolvesSubscriptionURLInsteadOfProvidedURL() async throws {
-        let started = expectation(description: "request started")
-        let stopped = expectation(description: "request cancelled via subscription map")
+    @Test("cancel resolves subscription URL instead of provided URL")
+    func cancelResolvesSubscriptionURLInsteadOfProvidedURL() async throws {
+        MockImageURLProtocol.reset()
+        defer { MockImageURLProtocol.reset() }
+
+        let started = LockedBox(false)
+        let stopped = LockedBox(false)
         let imageData = makeTestImageData()
 
         MockImageURLProtocol.onStopLoading = {
-            stopped.fulfill()
+            stopped.withValue { $0 = true }
         }
         MockImageURLProtocol.handler = { request in
             MockImageURLProtocol.requestCount += 1
-            started.fulfill()
+            started.withValue { $0 = true }
             try await Task.sleep(nanoseconds: 2_000_000_000)
             try Task.checkCancellation()
             guard let url = request.url else { throw URLError(.badURL) }
@@ -229,16 +252,16 @@ final class ImageLoadServiceTests: XCTestCase {
             try await service.loadImage(for: subscribedURL)
         }
 
-        await fulfillment(of: [started], timeout: 1)
+        #expect(await waitForFlag(started))
         await service.cancel(subscription, for: wrongURL)
-        await fulfillment(of: [stopped], timeout: 1)
+        #expect(await waitForFlag(stopped))
 
         do {
             _ = try await loadTask.value
-            XCTFail("Expected cancellation when using mismatched URL argument")
+            Issue.record("Expected cancellation when using mismatched URL argument")
         } catch {
             let isCancellation = error is CancellationError || (error as NSError).code == NSURLErrorCancelled
-            XCTAssertTrue(isCancellation)
+            #expect(isCancellation)
         }
     }
 
@@ -256,14 +279,23 @@ final class ImageLoadServiceTests: XCTestCase {
         }
         return image.pngData() ?? Data()
     }
+
+    private func waitForFlag(_ flag: LockedBox<Bool>, timeoutNanoseconds: UInt64 = 1_000_000_000) async -> Bool {
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            if flag.withValue({ $0 }) {
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return flag.withValue { $0 }
+    }
 }
 
 private final class MockImageURLProtocol: URLProtocol {
     static var requestCount = 0
     static var handler: ((URLRequest) async throws -> (HTTPURLResponse, Data))?
     static var onStopLoading: (() -> Void)?
-
-    private var loadingTask: Task<Void, Never>?
 
     static func reset() {
         requestCount = 0
@@ -280,21 +312,15 @@ private final class MockImageURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        loadingTask = Task { [request] in
+        Task {
             do {
                 guard let handler = MockImageURLProtocol.handler else {
                     throw URLError(.badServerResponse)
                 }
                 let (response, data) = try await handler(request)
-                if Task.isCancelled {
-                    client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
-                    return
-                }
-                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .allowed)
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
                 client?.urlProtocol(self, didLoad: data)
                 client?.urlProtocolDidFinishLoading(self)
-            } catch is CancellationError {
-                client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
             } catch {
                 client?.urlProtocol(self, didFailWithError: error)
             }
@@ -302,8 +328,6 @@ private final class MockImageURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {
-        loadingTask?.cancel()
-        loadingTask = nil
         MockImageURLProtocol.onStopLoading?()
     }
 }

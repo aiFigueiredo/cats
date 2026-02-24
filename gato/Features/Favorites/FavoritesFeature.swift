@@ -1,21 +1,17 @@
+import ComposableArchitecture
 import Foundation
 
+@Reducer
 struct FavoritesFeature {
-    struct State {
+    @ObservableState
+    struct State: Equatable {
         var favorites: [Breed] = []
         var isLoading = false
         var errorMessage: String?
         var favoriteToggleInFlight: Set<String> = []
-
-        var averageLifeSpanMax: Double {
-            let maxValues = favorites.compactMap { $0.lifeSpan?.max }
-            guard !maxValues.isEmpty else { return 0 }
-            let total = maxValues.reduce(0, +)
-            return Double(total) / Double(maxValues.count)
-        }
     }
 
-    enum Action {
+    enum Action: Equatable {
         case onAppear
         case favoritesLoaded([Breed])
         case loadFailed(String)
@@ -25,63 +21,55 @@ struct FavoritesFeature {
         case favoritePersistFailed(String, String)
     }
 
-    static func reduce(
-        state: inout State,
-        action: Action,
-        dependencies: AppDependencies
-    ) -> [Effect<Action>] {
-        switch action {
-        case .onAppear:
-            state.isLoading = true
-            state.errorMessage = nil
-            return [
-                .run {
-                    do {
-                        let breeds = try dependencies.persistenceClient.loadBreeds()
-                            .filter(\.isFavorite)
-                            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-                        return [.favoritesLoaded(breeds)]
-                    } catch {
-                        let message = (error as? LocalizedError)?.errorDescription ?? "Failed to load favorites."
-                        return [.loadFailed(message)]
-                    }
+    @Dependency(\.persistenceClient) var persistenceClient
+
+    var body: some Reducer<State, Action> {
+        Reduce { state, action in
+            switch action {
+            case .onAppear:
+                state.isLoading = true
+                state.errorMessage = nil
+                do {
+                    let breeds = try persistenceClient.loadBreeds()
+                        .filter(\.isFavorite)
+                        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                    return .send(.favoritesLoaded(breeds))
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? "Failed to load favorites."
+                    return .send(.loadFailed(message))
                 }
-            ]
 
-        case .favoritesLoaded(let favorites):
-            state.isLoading = false
-            state.favorites = favorites
-            return []
+            case .favoritesLoaded(let favorites):
+                state.isLoading = false
+                state.favorites = favorites
+                return .none
 
-        case .loadFailed(let message):
-            state.isLoading = false
-            state.errorMessage = message
-            return []
+            case .loadFailed(let message):
+                state.isLoading = false
+                state.errorMessage = message
+                return .none
 
-        case .toggleFavoriteTapped(let breedID):
-            guard !state.favoriteToggleInFlight.contains(breedID) else { return [] }
-            state.favoriteToggleInFlight.insert(breedID)
-            return [
-                .run {
-                    do {
-                        try dependencies.persistenceClient.setFavorite(breedID, false)
-                        return [.favoritePersisted(breedID)]
-                    } catch {
-                        let message = (error as? LocalizedError)?.errorDescription ?? "Failed to update favorite."
-                        return [.favoritePersistFailed(breedID, message)]
-                    }
+            case .toggleFavoriteTapped(let breedID):
+                guard !state.favoriteToggleInFlight.contains(breedID) else { return .none }
+                state.favoriteToggleInFlight.insert(breedID)
+                do {
+                    try persistenceClient.setFavorite(breedID, false)
+                    return .send(.favoritePersisted(breedID))
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? "Failed to update favorite."
+                    return .send(.favoritePersistFailed(breedID, message))
                 }
-            ]
 
-        case .favoritePersisted(let breedID):
-            state.favoriteToggleInFlight.remove(breedID)
-            state.favorites.removeAll { $0.id == breedID }
-            return []
+            case .favoritePersisted(let breedID):
+                state.favoriteToggleInFlight.remove(breedID)
+                state.favorites.removeAll { $0.id == breedID }
+                return .none
 
-        case .favoritePersistFailed(let breedID, let message):
-            state.favoriteToggleInFlight.remove(breedID)
-            state.errorMessage = message
-            return []
+            case .favoritePersistFailed(let breedID, let message):
+                state.favoriteToggleInFlight.remove(breedID)
+                state.errorMessage = message
+                return .none
+            }
         }
     }
 }

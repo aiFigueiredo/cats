@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		15AD2B542F4D2736001ACEE7 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 15AD2B532F4D2736001ACEE7 /* ComposableArchitecture */; };
+		35BB6DA72F4D8DAB001ACEE7 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 15AD2B532F4D2736001ACEE7 /* ComposableArchitecture */; };
+		35BB6DB52F4DA01A001ACEE7 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB32F4DA00F001ACEE7 /* Dependencies */; };
+		35BB6DB62F4DA020001ACEE7 /* CasePaths in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB42F4DA015001ACEE7 /* CasePaths */; };
+		35BB6DB72F4DA026001ACEE7 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB32F4DA00F001ACEE7 /* Dependencies */; };
+		35BB6DB82F4DA02C001ACEE7 /* CasePaths in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB42F4DA015001ACEE7 /* CasePaths */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		15AD26B92F4C83A0001ACEE7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -57,6 +66,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				35BB6DB62F4DA020001ACEE7 /* CasePaths in Frameworks */,
+				35BB6DB52F4DA01A001ACEE7 /* Dependencies in Frameworks */,
+				15AD2B542F4D2736001ACEE7 /* ComposableArchitecture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,6 +76,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				35BB6DB82F4DA02C001ACEE7 /* CasePaths in Frameworks */,
+				35BB6DB72F4DA026001ACEE7 /* Dependencies in Frameworks */,
+				35BB6DA72F4D8DAB001ACEE7 /* ComposableArchitecture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +99,7 @@
 				15AD26AD2F4C839F001ACEE7 /* gato */,
 				15AD26BB2F4C83A0001ACEE7 /* gatoTests */,
 				15AD26C52F4C83A0001ACEE7 /* gatoUITests */,
+				15AD2B522F4D2736001ACEE7 /* Frameworks */,
 				15AD26AC2F4C839F001ACEE7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -96,6 +112,13 @@
 				15AD26C22F4C83A0001ACEE7 /* gatoUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		15AD2B522F4D2736001ACEE7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -118,6 +141,9 @@
 			);
 			name = gato;
 			packageProductDependencies = (
+				35BB6DB42F4DA015001ACEE7 /* CasePaths */,
+				35BB6DB32F4DA00F001ACEE7 /* Dependencies */,
+				15AD2B532F4D2736001ACEE7 /* ComposableArchitecture */,
 			);
 			productName = gato;
 			productReference = 15AD26AB2F4C839F001ACEE7 /* gato.app */;
@@ -141,6 +167,9 @@
 			);
 			name = gatoTests;
 			packageProductDependencies = (
+				35BB6DB42F4DA015001ACEE7 /* CasePaths */,
+				35BB6DB32F4DA00F001ACEE7 /* Dependencies */,
+				15AD2B532F4D2736001ACEE7 /* ComposableArchitecture */,
 			);
 			productName = gatoTests;
 			productReference = 15AD26B82F4C83A0001ACEE7 /* gatoTests.xctest */;
@@ -201,6 +230,11 @@
 			);
 			mainGroup = 15AD26A22F4C839F001ACEE7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				35BB6DB22F4DA009001ACEE7 /* XCRemoteSwiftPackageReference "swift-case-paths" */,
+				35BB6DB12F4DA001001ACEE7 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
+				15AD2B512F4D2726001ACEE7 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 15AD26AC2F4C839F001ACEE7 /* Products */;
 			projectDirPath = "";
@@ -627,6 +661,51 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		15AD2B512F4D2726001ACEE7 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.24.0;
+			};
+		};
+		35BB6DB12F4DA001001ACEE7 /* XCRemoteSwiftPackageReference "swift-dependencies" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-dependencies";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.11.0;
+			};
+		};
+		35BB6DB22F4DA009001ACEE7 /* XCRemoteSwiftPackageReference "swift-case-paths" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-case-paths";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.7.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		15AD2B532F4D2736001ACEE7 /* ComposableArchitecture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 15AD2B512F4D2726001ACEE7 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			productName = ComposableArchitecture;
+		};
+		35BB6DB32F4DA00F001ACEE7 /* Dependencies */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 35BB6DB12F4DA001001ACEE7 /* XCRemoteSwiftPackageReference "swift-dependencies" */;
+			productName = Dependencies;
+		};
+		35BB6DB42F4DA015001ACEE7 /* CasePaths */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 35BB6DB22F4DA009001ACEE7 /* XCRemoteSwiftPackageReference "swift-case-paths" */;
+			productName = CasePaths;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 15AD26A32F4C839F001ACEE7 /* Project object */;
 }

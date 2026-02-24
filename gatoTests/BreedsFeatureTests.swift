@@ -1,10 +1,15 @@
-import XCTest
+import ComposableArchitecture
+import Foundation
+import Testing
 @testable import gato
 
-final class BreedsFeatureTests: XCTestCase {
-    func testPaginationLoadsMultiplePages() {
-        var state = BreedsFeature.State()
-        state.pageSize = 20
+@Suite("BreedsFeature")
+@MainActor
+struct BreedsFeatureTests {
+    @Test("pagination loads multiple pages")
+    func paginationLoadsMultiplePages() async {
+        var initialState = BreedsFeature.State()
+        initialState.pageSize = 20
 
         let breeds = (0..<45).map { index in
             Breed(
@@ -19,160 +24,167 @@ final class BreedsFeatureTests: XCTestCase {
             )
         }
 
-        let deps = AppDependencies.mock
-        _ = BreedsFeature.reduce(state: &state, action: .cachedBreedsLoaded(breeds), dependencies: deps)
+        let sortedBreeds = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        XCTAssertEqual(state.breeds.count, 20)
-        XCTAssertEqual(state.currentPage, 1)
-        XCTAssertTrue(state.canLoadMore)
-
-        _ = BreedsFeature.reduce(state: &state, action: .loadNextPage, dependencies: deps)
-
-        XCTAssertEqual(state.breeds.count, 40)
-        XCTAssertEqual(state.currentPage, 2)
-        XCTAssertTrue(state.canLoadMore)
-    }
-
-    func testSearchFilteringIsCaseInsensitive() {
-        var state = BreedsFeature.State()
-        let deps = AppDependencies.mock
-
-        _ = BreedsFeature.reduce(
-            state: &state,
-            action: .cachedBreedsLoaded([
-                Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false),
-                Breed(id: "2", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
-            ]),
-            dependencies: deps
-        )
-
-        let effects = BreedsFeature.reduce(state: &state, action: .searchQueryChanged("ABY"), dependencies: deps)
-        let actions = awaitActions(effects)
-        for action in actions {
-            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        let store = TestStore(initialState: initialState) {
+            BreedsFeature()
+        } withDependencies: {
+            $0.apiClient = .mock
+            $0.persistenceClient = .mock()
         }
 
-        XCTAssertEqual(state.breeds.map(\.name), ["Abyssinian"])
+        await store.send(.cachedBreedsLoaded(breeds)) {
+            $0.allBreeds = sortedBreeds
+            $0.filteredBreeds = sortedBreeds
+            $0.breeds = Array(sortedBreeds.prefix(20))
+            $0.currentPage = 1
+            $0.canLoadMore = true
+        }
+
+        await store.send(.loadNextPage) {
+            $0.isLoadingPage = true
+            $0.breeds = Array(sortedBreeds.prefix(40))
+            $0.isLoadingPage = false
+            $0.currentPage = 2
+            $0.canLoadMore = true
+        }
     }
 
-    func testFavoriteTogglePersistsBeforeStateUpdate() async {
-        var state = BreedsFeature.State()
-        state.allBreeds = [
+    @Test("search filtering is case-insensitive")
+    func searchFilteringIsCaseInsensitive() async {
+        let breeds = [
+            Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false),
+            Breed(id: "2", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        ]
+
+        var initialState = BreedsFeature.State()
+        initialState.searchQuery = "ABY"
+
+        let store = TestStore(initialState: initialState) {
+            BreedsFeature()
+        } withDependencies: {
+            $0.apiClient = .mock
+            $0.persistenceClient = .mock()
+        }
+
+        await store.send(.cachedBreedsLoaded(breeds)) {
+            $0.allBreeds = breeds
+            $0.filteredBreeds = [breeds[0]]
+            $0.breeds = [breeds[0]]
+            $0.currentPage = 1
+            $0.canLoadMore = false
+        }
+    }
+
+    @Test("favorite toggle persists before state update")
+    func favoriteTogglePersistsBeforeStateUpdate() async {
+        let writeCount = LockedBox(0)
+
+        var initialState = BreedsFeature.State()
+        initialState.allBreeds = [
             Breed(id: "1", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        state.filteredBreeds = state.allBreeds
-        state.breeds = state.allBreeds
-        state.currentPage = 1
+        initialState.filteredBreeds = initialState.allBreeds
+        initialState.breeds = initialState.allBreeds
+        initialState.currentPage = 1
 
-        var writeCount = 0
-        let deps = AppDependencies(
-            apiClient: .mock,
-            persistenceClient: .mock(
-                loadBreeds: { state.allBreeds },
-                setFavorite: { _, _ in writeCount += 1 }
-            ),
-            imageClient: .live
-        )
-
-        let effects = BreedsFeature.reduce(state: &state, action: .toggleFavoriteTapped("1"), dependencies: deps)
-        XCTAssertFalse(state.breeds[0].isFavorite)
-
-        let followUps = await effects.flatMapAsyncActions()
-        for action in followUps {
-            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        let store = TestStore(initialState: initialState) {
+            BreedsFeature()
+        } withDependencies: {
+            $0.apiClient = .mock
+            $0.persistenceClient = .mock(
+                setFavorite: { _, _ in
+                    writeCount.withValue { $0 += 1 }
+                }
+            )
         }
 
-        XCTAssertEqual(writeCount, 1)
-        XCTAssertTrue(state.breeds[0].isFavorite)
+        await store.send(.toggleFavoriteTapped("1")) {
+            $0.favoriteToggleInFlight = ["1"]
+        }
+
+        await store.receive(.favoritePersisted("1", true)) {
+            $0.favoriteToggleInFlight = []
+            $0.allBreeds[0].isFavorite = true
+            $0.filteredBreeds[0].isFavorite = true
+            $0.breeds[0].isFavorite = true
+        }
+
+        #expect(writeCount.withValue { $0 } == 1)
     }
 
-    func testOnAppearRefreshesFavoriteFlagsAfterExternalFavoriteRemoval() async {
-        var state = BreedsFeature.State()
-        state.hasLoaded = true
-        state.currentPage = 1
-        state.pageSize = 20
-        state.allBreeds = [
+    @Test("onAppear refreshes favorite flags after external favorite removal")
+    func onAppearRefreshesFavoriteFlagsAfterExternalFavoriteRemoval() async {
+        var initialState = BreedsFeature.State()
+        initialState.hasLoaded = true
+        initialState.currentPage = 1
+        initialState.pageSize = 20
+        initialState.allBreeds = [
             Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: true),
             Breed(id: "birm", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        state.filteredBreeds = state.allBreeds
-        state.breeds = state.allBreeds
+        initialState.filteredBreeds = initialState.allBreeds
+        initialState.breeds = initialState.allBreeds
 
-        let deps = AppDependencies(
-            apiClient: .mock,
-            persistenceClient: .mock(
-                loadFavoriteIDs: { [] }
-            ),
-            imageClient: .live
-        )
-
-        let effects = BreedsFeature.reduce(state: &state, action: .onAppear, dependencies: deps)
-        let followUps = await effects.flatMapAsyncActions()
-        for action in followUps {
-            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+        let store = TestStore(initialState: initialState) {
+            BreedsFeature()
+        } withDependencies: {
+            $0.apiClient = .mock
+            $0.persistenceClient = .mock(loadFavoriteIDs: { [] })
         }
 
-        XCTAssertFalse(state.breeds[0].isFavorite)
-        XCTAssertFalse(state.allBreeds[0].isFavorite)
+        await store.send(.onAppear)
+
+        await store.receive(.favoriteFlagsRefreshed([])) {
+            $0.allBreeds[0].isFavorite = false
+            $0.filteredBreeds[0].isFavorite = false
+            $0.breeds[0].isFavorite = false
+        }
     }
 
-    func testBreedRowAppearHydratesMissingImageAndPersistsIt() async {
-        var state = BreedsFeature.State()
-        state.allBreeds = [
+    @Test("breed row appear hydrates missing image and persists it")
+    func breedRowAppearHydratesMissingImageAndPersistsIt() async {
+        let expectedURL = URL(string: "https://cdn2.thecatapi.com/images/0XYvRd7oD.jpg")!
+        let persistedImage = LockedBox<(String, URL?)?>(nil)
+
+        var initialState = BreedsFeature.State()
+        initialState.allBreeds = [
             Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        state.filteredBreeds = state.allBreeds
-        state.breeds = state.allBreeds
-        state.currentPage = 1
+        initialState.filteredBreeds = initialState.allBreeds
+        initialState.breeds = initialState.allBreeds
+        initialState.currentPage = 1
 
-        let expectedURL = URL(string: "https://cdn2.thecatapi.com/images/0XYvRd7oD.jpg")!
-        var persistedImage: (String, URL?)?
-
-        let deps = AppDependencies(
-            apiClient: CatAPIClient(
+        let store = TestStore(initialState: initialState) {
+            BreedsFeature()
+        } withDependencies: {
+            $0.apiClient = CatAPIClient(
                 fetchBreeds: { _, _ in [] },
                 fetchBreedImage: { breedID in
-                    XCTAssertEqual(breedID, "abys")
+                    #expect(breedID == "abys")
                     return expectedURL
                 }
-            ),
-            persistenceClient: .mock(
+            )
+            $0.persistenceClient = .mock(
                 updateBreedImage: { breedID, imageURL in
-                    persistedImage = (breedID, imageURL)
+                    persistedImage.withValue { $0 = (breedID, imageURL) }
                 }
-            ),
-            imageClient: .live
-        )
-
-        let effects = BreedsFeature.reduce(state: &state, action: .breedRowAppeared("abys"), dependencies: deps)
-        let followUps = await effects.flatMapAsyncActions()
-        for action in followUps {
-            _ = BreedsFeature.reduce(state: &state, action: action, dependencies: deps)
+            )
         }
 
-        XCTAssertEqual(state.allBreeds.first?.imageURL, expectedURL)
-        XCTAssertEqual(state.breeds.first?.imageURL, expectedURL)
-        XCTAssertEqual(persistedImage?.0, "abys")
-        XCTAssertEqual(persistedImage?.1, expectedURL)
-    }
-
-    private func awaitActions(_ effects: [Effect<BreedsFeature.Action>]) -> [BreedsFeature.Action] {
-        let group = DispatchGroup()
-        var captured: [BreedsFeature.Action] = []
-        let lock = NSLock()
-
-        for effect in effects {
-            group.enter()
-            Task {
-                let actions = await effect.operation()
-                lock.lock()
-                captured.append(contentsOf: actions)
-                lock.unlock()
-                group.leave()
-            }
+        await store.send(.breedRowAppeared("abys")) {
+            $0.imageHydrationInFlight = ["abys"]
         }
 
-        group.wait()
-        return captured
+        await store.receive(.breedImageHydrated("abys", expectedURL)) {
+            $0.imageHydrationInFlight = []
+            $0.allBreeds[0].imageURL = expectedURL
+            $0.filteredBreeds[0].imageURL = expectedURL
+            $0.breeds[0].imageURL = expectedURL
+        }
+
+        let saved = persistedImage.withValue { $0 }
+        #expect(saved?.0 == "abys")
+        #expect(saved?.1 == expectedURL)
     }
 }

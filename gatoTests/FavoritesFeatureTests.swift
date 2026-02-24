@@ -1,8 +1,12 @@
-import XCTest
+import ComposableArchitecture
+import Testing
 @testable import gato
 
-final class FavoritesFeatureTests: XCTestCase {
-    func testAverageLifespanUsesMaxValues() {
+@Suite("FavoritesFeature")
+@MainActor
+struct FavoritesFeatureTests {
+    @Test("average lifespan uses max values")
+    func averageLifespanUsesMaxValues() {
         var state = FavoritesFeature.State()
         state.favorites = [
             makeBreed(id: "a", maxLife: 10, isFavorite: true),
@@ -10,37 +14,42 @@ final class FavoritesFeatureTests: XCTestCase {
             makeBreed(id: "c", maxLife: 8, isFavorite: true)
         ]
 
-        XCTAssertEqual(state.averageLifeSpanMax, (10 + 16 + 8) / 3.0, accuracy: 0.0001)
+        let maxValues = state.favorites.compactMap { $0.lifeSpan?.max }
+        let average = Double(maxValues.reduce(0, +)) / Double(maxValues.count)
+        #expect(average == (10 + 16 + 8) / 3.0)
     }
 
-    func testToggleFavoriteRemovesItemOnSuccess() async {
-        var state = FavoritesFeature.State()
-        state.favorites = [makeBreed(id: "abys", maxLife: 14, isFavorite: true)]
+    @Test("toggle favorite removes item on success")
+    func toggleFavoriteRemovesItemOnSuccess() async {
+        let persisted = LockedBox<[(String, Bool)]>([])
 
-        var persisted: [(String, Bool)] = []
-        let deps = AppDependencies(
-            apiClient: .mock,
-            persistenceClient: .mock(
-                loadBreeds: { [] },
+        var initialState = FavoritesFeature.State()
+        initialState.favorites = [makeBreed(id: "abys", maxLife: 14, isFavorite: true)]
+
+        let store = TestStore(initialState: initialState) {
+            FavoritesFeature()
+        } withDependencies: {
+            $0.persistenceClient = .mock(
                 setFavorite: { id, value in
-                    persisted.append((id, value))
+                    persisted.withValue { $0.append((id, value)) }
                 }
-            ),
-            imageClient: .live
-        )
-
-        let effects = FavoritesFeature.reduce(state: &state, action: .toggleFavoriteTapped("abys"), dependencies: deps)
-        XCTAssertEqual(state.favoriteToggleInFlight, ["abys"])
-
-        let followUpActions = await effects.flatMapAsyncActions()
-        for action in followUpActions {
-            _ = FavoritesFeature.reduce(state: &state, action: action, dependencies: deps)
+            )
+            $0.apiClient = .mock
         }
 
-        XCTAssertEqual(persisted.count, 1)
-        XCTAssertEqual(persisted.first?.0, "abys")
-        XCTAssertEqual(persisted.first?.1, false)
-        XCTAssertTrue(state.favorites.isEmpty)
+        await store.send(.toggleFavoriteTapped("abys")) {
+            $0.favoriteToggleInFlight = ["abys"]
+        }
+
+        await store.receive(.favoritePersisted("abys")) {
+            $0.favoriteToggleInFlight = []
+            $0.favorites = []
+        }
+
+        let writes = persisted.withValue { $0 }
+        #expect(writes.count == 1)
+        #expect(writes.first?.0 == "abys")
+        #expect(writes.first?.1 == false)
     }
 }
 

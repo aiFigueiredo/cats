@@ -1,18 +1,19 @@
+import ComposableArchitecture
 import SwiftUI
 
 struct FavoritesView: View {
-    @ObservedObject var store: Store<FavoritesFeature.State, FavoritesFeature.Action>
+    let store: StoreOf<FavoritesFeature>
     let imageClient: ImageClient
 
     var body: some View {
         Group {
-            if store.state.isLoading {
+            if store.isLoading {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Loading favorites...")
                         .foregroundStyle(.secondary)
                 }
-            } else if let message = store.state.errorMessage, store.state.favorites.isEmpty {
+            } else if let message = store.errorMessage, store.favorites.isEmpty {
                 VStack(spacing: 12) {
                     Text("Could not load favorites")
                         .font(.headline)
@@ -22,7 +23,7 @@ struct FavoritesView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
-            } else if store.state.favorites.isEmpty {
+            } else if store.favorites.isEmpty {
                 VStack(spacing: 12) {
                     Text("No favorites yet")
                         .font(.headline)
@@ -37,21 +38,21 @@ struct FavoritesView: View {
                         HStack {
                             Text("Average lifespan")
                             Spacer()
-                            Text(String(format: "%.1f years", store.state.averageLifeSpanMax))
+                            Text(String(format: "%.1f years", averageLifeSpanMax))
                                 .fontWeight(.semibold)
                         }
                         .accessibilityIdentifier("favorites_average_lifespan")
                     }
 
                     Section("Favorites") {
-                        ForEach(store.state.favorites) { breed in
+                        ForEach(store.favorites) { breed in
                             HStack(spacing: 12) {
                                 NavigationLink {
-                                    if let currentBreed = store.state.favorites.first(where: { $0.id == breed.id }) {
+                                    if let currentBreed = store.favorites.first(where: { $0.id == breed.id }) {
                                         BreedDetailView(
                                             state: BreedDetailFeature.State(
                                                 breed: currentBreed,
-                                                isFavoriteToggleInFlight: store.state.favoriteToggleInFlight.contains(breed.id)
+                                                isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id)
                                             ),
                                             imageClient: imageClient,
                                             onToggleFavorite: {
@@ -93,7 +94,7 @@ struct FavoritesView: View {
                                         .frame(width: 44, height: 44)
                                 }
                                 .buttonStyle(.borderless)
-                                .disabled(store.state.favoriteToggleInFlight.contains(breed.id))
+                                .disabled(store.favoriteToggleInFlight.contains(breed.id))
                                 .accessibilityIdentifier("remove_favorite_\(breed.id)")
                             }
                         }
@@ -107,5 +108,12 @@ struct FavoritesView: View {
         .onAppear {
             store.send(.onAppear)
         }
+    }
+
+    private var averageLifeSpanMax: Double {
+        let maxValues = store.favorites.compactMap { $0.lifeSpan?.max }
+        guard !maxValues.isEmpty else { return 0 }
+        let total = maxValues.reduce(0, +)
+        return Double(total) / Double(maxValues.count)
     }
 }

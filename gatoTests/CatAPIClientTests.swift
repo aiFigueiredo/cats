@@ -1,31 +1,26 @@
 import Foundation
-import XCTest
+import Testing
 @testable import gato
 
+@Suite("CatAPIClient", .serialized)
 @MainActor
-final class CatAPIClientTests: XCTestCase {
-    override func setUp() {
-        super.setUp()
+struct CatAPIClientTests {
+    @Test("fetchBreedImage returns URL when response matches requested breed")
+    func fetchBreedImageReturnsURLWhenResponseMatchesRequestedBreed() async throws {
         MockCatAPIURLProtocol.reset()
-    }
+        defer { MockCatAPIURLProtocol.reset() }
 
-    override func tearDown() {
-        MockCatAPIURLProtocol.reset()
-        super.tearDown()
-    }
-
-    func testFetchBreedImageReturnsURLWhenResponseMatchesRequestedBreed() async throws {
         let expectedURL = URL(string: "https://cdn.example.com/abys.jpg")!
 
         MockCatAPIURLProtocol.handler = { request in
-            XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "test-key")
+            #expect(request.value(forHTTPHeaderField: "x-api-key") == "test-key")
 
-            let components = URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)
+            let components = URLComponents(url: try #require(request.url), resolvingAgainstBaseURL: false)
             let queryItems = Dictionary(uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-            XCTAssertEqual(queryItems["breed_ids"], "abys")
-            XCTAssertEqual(queryItems["limit"], "1")
-            XCTAssertEqual(queryItems["has_breeds"], "1")
-            XCTAssertEqual(queryItems["include_breeds"], "1")
+            #expect(queryItems["breed_ids"] == "abys")
+            #expect(queryItems["limit"] == "1")
+            #expect(queryItems["has_breeds"] == "1")
+            #expect(queryItems["include_breeds"] == "1")
 
             let payload = """
             [
@@ -39,7 +34,7 @@ final class CatAPIClientTests: XCTestCase {
             """
 
             let response = HTTPURLResponse(
-                url: try XCTUnwrap(request.url),
+                url: try #require(request.url),
                 statusCode: 200,
                 httpVersion: nil,
                 headerFields: nil
@@ -56,10 +51,14 @@ final class CatAPIClientTests: XCTestCase {
         )
 
         let imageURL = try await client.fetchBreedImage("abys")
-        XCTAssertEqual(imageURL, expectedURL)
+        #expect(imageURL == expectedURL)
     }
 
-    func testFetchBreedImageReturnsNilWhenResponseBreedDoesNotMatchRequestedBreed() async throws {
+    @Test("fetchBreedImage returns nil when response breed does not match requested breed")
+    func fetchBreedImageReturnsNilWhenResponseBreedDoesNotMatchRequestedBreed() async throws {
+        MockCatAPIURLProtocol.reset()
+        defer { MockCatAPIURLProtocol.reset() }
+
         let mismatchedURL = URL(string: "https://cdn.example.com/birm.jpg")!
 
         MockCatAPIURLProtocol.handler = { request in
@@ -75,7 +74,7 @@ final class CatAPIClientTests: XCTestCase {
             """
 
             let response = HTTPURLResponse(
-                url: try XCTUnwrap(request.url),
+                url: try #require(request.url),
                 statusCode: 200,
                 httpVersion: nil,
                 headerFields: nil
@@ -92,10 +91,14 @@ final class CatAPIClientTests: XCTestCase {
         )
 
         let imageURL = try await client.fetchBreedImage("abys")
-        XCTAssertNil(imageURL)
+        #expect(imageURL == nil)
     }
 
-    func testFetchBreedImageFallsBackToURLWhenBreedMetadataIsMissing() async throws {
+    @Test("fetchBreedImage falls back to URL when breed metadata is missing")
+    func fetchBreedImageFallsBackToURLWhenBreedMetadataIsMissing() async throws {
+        MockCatAPIURLProtocol.reset()
+        defer { MockCatAPIURLProtocol.reset() }
+
         let expectedURL = URL(string: "https://cdn.example.com/no-breed-metadata.jpg")!
 
         MockCatAPIURLProtocol.handler = { request in
@@ -108,7 +111,7 @@ final class CatAPIClientTests: XCTestCase {
             """
 
             let response = HTTPURLResponse(
-                url: try XCTUnwrap(request.url),
+                url: try #require(request.url),
                 statusCode: 200,
                 httpVersion: nil,
                 headerFields: nil
@@ -125,7 +128,7 @@ final class CatAPIClientTests: XCTestCase {
         )
 
         let imageURL = try await client.fetchBreedImage("abys")
-        XCTAssertEqual(imageURL, expectedURL)
+        #expect(imageURL == expectedURL)
     }
 
     private func makeSession() -> URLSession {

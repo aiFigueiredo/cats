@@ -30,34 +30,17 @@ extension PersistenceClient {
     }
 }
 
-extension AppDependencies {
-    static var mock: AppDependencies {
-        AppDependencies(
-            apiClient: .mock,
-            persistenceClient: .mock(),
-            imageClient: .live
-        )
-    }
-}
+final class LockedBox<Value>: @unchecked Sendable {
+    private var value: Value
+    private let lock = NSLock()
 
-extension Array where Element == Effect<BreedsFeature.Action> {
-    func flatMapAsyncActions() async -> [BreedsFeature.Action] {
-        var all: [BreedsFeature.Action] = []
-        for effect in self {
-            let next = await effect.operation()
-            all.append(contentsOf: next)
-        }
-        return all
+    init(_ value: Value) {
+        self.value = value
     }
-}
 
-extension Array where Element == Effect<FavoritesFeature.Action> {
-    func flatMapAsyncActions() async -> [FavoritesFeature.Action] {
-        var all: [FavoritesFeature.Action] = []
-        for effect in self {
-            let next = await effect.operation()
-            all.append(contentsOf: next)
-        }
-        return all
+    func withValue<Result>(_ body: (inout Value) -> Result) -> Result {
+        lock.lock()
+        defer { lock.unlock() }
+        return body(&value)
     }
 }
