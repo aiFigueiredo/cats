@@ -27,8 +27,10 @@ extension PersistenceClient {
         PersistenceClient(
             loadBreeds: {
                 do {
-                    let favoriteIDs = try loadFavorites(context: context)
                     return try context.performSync {
+                        let favorites = try context.fetch(CDFavorite.fetchRequest())
+                        let favoriteIDs = Set(favorites.map(\.breedID))
+
                         let request = CDBreed.fetchRequest()
                         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(CDBreed.name), ascending: true)]
                         return try context.fetch(request).map { $0.toDomain(isFavorite: favoriteIDs.contains($0.id)) }
@@ -41,12 +43,21 @@ extension PersistenceClient {
             upsertBreeds: { breeds, now in
                 do {
                     try context.performSync {
-                        for breed in breeds {
-                            let request = CDBreed.fetchRequest()
-                            request.predicate = NSPredicate(format: "id == %@", breed.id)
-                            request.fetchLimit = 1
+                        guard !breeds.isEmpty else { return }
 
-                            let managed = try context.fetch(request).first ?? CDBreed(context: context)
+                        let breedIDs = breeds.map(\.id)
+                        let existingRequest = CDBreed.fetchRequest()
+                        existingRequest.predicate = NSPredicate(format: "id IN %@", breedIDs)
+
+                        let existingBreeds = try context.fetch(existingRequest)
+                        var existingByID: [String: CDBreed] = [:]
+                        existingByID.reserveCapacity(existingBreeds.count)
+                        for existing in existingBreeds {
+                            existingByID[existing.id] = existing
+                        }
+
+                        for breed in breeds {
+                            let managed = existingByID[breed.id] ?? CDBreed(context: context)
                             managed.id = breed.id
                             managed.name = breed.name
                             managed.origin = breed.origin
