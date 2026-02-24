@@ -4,17 +4,16 @@ import SwiftUI
 struct BreedsView: View {
     let store: StoreOf<BreedsFeature>
     let imageClient: ImageClient
-    let selectedTab: AppTab
 
     var body: some View {
         Group {
-            if store.isLoading && store.breeds.isEmpty {
+            if store.isLoading && store.visibleBreeds.isEmpty {
                 loadingView
             } else if store.showFatalOfflineState {
                 fatalOfflineView
-            } else if let errorMessage = store.errorMessage, store.breeds.isEmpty {
+            } else if let errorMessage = store.errorMessage, store.visibleBreeds.isEmpty {
                 errorView(message: errorMessage)
-            } else if store.breeds.isEmpty {
+            } else if store.visibleBreeds.isEmpty {
                 emptyView
             } else {
                 listView
@@ -44,9 +43,6 @@ struct BreedsView: View {
                     }
             }
         }
-        .onAppear {
-            store.send(.onAppear)
-        }
     }
 
     private var listView: some View {
@@ -58,13 +54,12 @@ struct BreedsView: View {
                     .accessibilityIdentifier("offline_banner")
             }
 
-            ForEach(store.breeds) { breed in
+            ForEach(store.visibleBreeds) { breed in
                 NavigationLink {
                     BreedDetailView(
                         breedID: breed.id,
                         breedsStore: store,
-                        imageClient: imageClient,
-                        selectedTab: selectedTab
+                        imageClient: imageClient
                     )
                 } label: {
                     HStack(spacing: 12) {
@@ -106,21 +101,13 @@ struct BreedsView: View {
                     store.send(.breedRowAppeared(breed.id))
                 }
             }
-
-            if store.isLoadingPage {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-            }
         }
         .listStyle(.plain)
         .accessibilityIdentifier("breeds_list")
         .onAppear {
             prefetchVisibleBreedsForImageHydration()
         }
-        .onChange(of: store.breeds.map(\.id)) { _, _ in
+        .onChange(of: store.visibleBreedIDs) { _, _ in
             prefetchVisibleBreedsForImageHydration()
         }
     }
@@ -188,8 +175,6 @@ struct BreedsView: View {
     }
 
     private func prefetchVisibleBreedsForImageHydration() {
-        for breed in store.breeds.prefix(12) {
-            store.send(.breedRowAppeared(breed.id))
-        }
+        store.send(.prefetchRequested(Array(store.visibleBreedIDs.prefix(12))))
     }
 }

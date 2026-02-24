@@ -13,8 +13,7 @@ struct AppView: View {
             NavigationStack {
                 BreedsView(
                     store: store.scope(state: \.breeds, action: \.breeds),
-                    imageClient: imageClient,
-                    selectedTab: store.selectedTab
+                    imageClient: imageClient
                 )
             }
             .tabItem {

@@ -7,14 +7,12 @@ struct BreedDetailView: View {
     init(
         breedID: String,
         breedsStore: StoreOf<BreedsFeature>,
-        imageClient: ImageClient,
-        selectedTab: AppTab
+        imageClient: ImageClient
     ) {
         self.source = .breeds(
             breedID: breedID,
             breedsStore: breedsStore,
-            imageClient: imageClient,
-            selectedTab: selectedTab
+            imageClient: imageClient
         )
     }
 
@@ -33,12 +31,11 @@ struct BreedDetailView: View {
     @ViewBuilder
     var body: some View {
         switch source {
-        case let .breeds(breedID, breedsStore, imageClient, selectedTab):
+        case let .breeds(breedID, breedsStore, imageClient):
             BreedDetailContentView(
                 breedID: breedID,
                 breedsStore: breedsStore,
-                imageClient: imageClient,
-                selectedTab: selectedTab
+                imageClient: imageClient
             )
 
         case let .standalone(state, imageClient, onToggleFavorite):
@@ -56,8 +53,7 @@ private extension BreedDetailView {
         case breeds(
             breedID: String,
             breedsStore: StoreOf<BreedsFeature>,
-            imageClient: ImageClient,
-            selectedTab: AppTab
+            imageClient: ImageClient
         )
 
         case standalone(
@@ -72,11 +68,10 @@ private struct BreedDetailContentView: View {
     let breedID: String
     let breedsStore: StoreOf<BreedsFeature>
     let imageClient: ImageClient
-    let selectedTab: AppTab
 
     var body: some View {
         Group {
-            if let breed = breedsStore.allBreeds.first(where: { $0.id == breedID }) {
+            if let breed = breedsStore.breedsByID[breedID] {
                 breedDetailBody(
                     state: BreedDetailFeature.State(
                         breed: breed,
@@ -90,14 +85,6 @@ private struct BreedDetailContentView: View {
             } else {
                 Text("Breed unavailable")
                     .navigationTitle("Breed")
-            }
-        }
-        .onAppear {
-            breedsStore.send(.onAppear)
-        }
-        .onChange(of: selectedTab) { _, tab in
-            if tab == .breeds {
-                breedsStore.send(.onAppear)
             }
         }
     }
