@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import CoreData
+import Foundation
 import Testing
 @testable import gato
 
@@ -12,8 +13,8 @@ struct IntegrationSyncTests {
         let persistence = PersistenceClient.live(context: store.container.viewContext)
 
         let expectedBreeds = [
-            Breed(id: "abys", name: "Abyssinian", origin: "Egypt", temperament: "Active", description: "Friendly", lifeSpan: LifeSpanRange(min: 10, max: 15), imageURL: nil, isFavorite: false),
-            Breed(id: "birm", name: "Birman", origin: "France", temperament: "Calm", description: "Gentle", lifeSpan: LifeSpanRange(min: 12, max: 16), imageURL: nil, isFavorite: false)
+            Breed(id: "abys", name: "Abyssinian", origin: "Egypt", temperament: "Active", description: "Friendly", lifeSpan: LifeSpanRange(min: 10, max: 15), imageURL: URL(string: "https://example.com/abys.png"), isFavorite: false),
+            Breed(id: "birm", name: "Birman", origin: "France", temperament: "Calm", description: "Gentle", lifeSpan: LifeSpanRange(min: 12, max: 16), imageURL: URL(string: "https://example.com/birm.png"), isFavorite: false)
         ]
 
         let onlineStore = TestStore(initialState: BreedsFeature.State()) {
@@ -40,10 +41,10 @@ struct IntegrationSyncTests {
             $0.isLoading = false
             $0.isOfflineMode = false
             $0.showFatalOfflineState = false
-            $0.allBreeds = sortedExpected
-            $0.filteredBreeds = sortedExpected
-            $0.breeds = sortedExpected
-            $0.currentPage = 1
+            $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
+            $0.orderedBreedIDs = sortedExpected.map(\.id)
+            $0.filteredBreedIDs = sortedExpected.map(\.id)
+            $0.visibleCount = 2
             $0.canLoadMore = false
         }
 
@@ -65,10 +66,10 @@ struct IntegrationSyncTests {
         }
 
         await offlineStore.receive(.cachedBreedsLoaded(sortedExpected)) {
-            $0.allBreeds = sortedExpected
-            $0.filteredBreeds = sortedExpected
-            $0.breeds = sortedExpected
-            $0.currentPage = 1
+            $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
+            $0.orderedBreedIDs = sortedExpected.map(\.id)
+            $0.filteredBreedIDs = sortedExpected.map(\.id)
+            $0.visibleCount = 2
             $0.canLoadMore = false
         }
 
@@ -78,7 +79,7 @@ struct IntegrationSyncTests {
             $0.isOfflineMode = true
         }
 
-        #expect(Set(offlineStore.state.allBreeds.map(\.id)) == Set(expectedBreeds.map(\.id)))
+        #expect(Set(offlineStore.state.breedsByID.keys) == Set(expectedBreeds.map(\.id)))
         #expect(offlineStore.state.bannerMessage != nil)
     }
 
