@@ -8,7 +8,7 @@ struct AppView: View {
     var body: some View {
         TabView(selection: Binding(
             get: { store.selectedTab },
-            set: { store.send(.selectTab($0)) }
+            set: { store.send(.tabSelected($0)) }
         )) {
             NavigationStack {
                 BreedsView(
@@ -34,7 +34,7 @@ struct AppView: View {
             .tag(AppTab.favorites)
         }
         .onAppear {
-            store.send(.onAppear)
+            store.send(.appStarted)
         }
     }
 }

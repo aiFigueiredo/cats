@@ -16,8 +16,10 @@ struct AppFeature {
     }
 
     enum Action: Equatable {
-        case onAppear
-        case selectTab(AppTab)
+        case appStarted
+        case tabSelected(AppTab)
+        case breedsTabBecameActive
+        case favoritesTabBecameActive
         case breeds(BreedsFeature.Action)
         case favorites(FavoritesFeature.Action)
     }
@@ -33,12 +35,19 @@ struct AppFeature {
 
         Reduce { state, action in
             switch action {
-            case .onAppear:
-                return effectForSelectedTab(state: state, tab: state.selectedTab)
+            case .appStarted:
+                return activationEffect(for: state.selectedTab)
 
-            case .selectTab(let tab):
+            case .tabSelected(let tab):
+                guard state.selectedTab != tab else { return .none }
                 state.selectedTab = tab
-                return effectForSelectedTab(state: state, tab: tab)
+                return activationEffect(for: tab)
+
+            case .breedsTabBecameActive:
+                return activationEffect(for: .breeds)
+
+            case .favoritesTabBecameActive:
+                return activationEffect(for: .favorites)
 
             case .favorites(.favoritesLoaded), .favorites(.favoritePersisted):
                 let favoriteIDs = Set(state.favorites.favorites.map(\.id))
@@ -50,14 +59,10 @@ struct AppFeature {
         }
     }
 
-    private func effectForSelectedTab(state: State, tab: AppTab) -> Effect<Action> {
+    private func activationEffect(for tab: AppTab) -> Effect<Action> {
         switch tab {
         case .breeds:
-            let favoriteIDs = Set(state.favorites.favorites.map(\.id))
-            return .concatenate(
-                .send(.breeds(.favoriteFlagsRefreshed(favoriteIDs))),
-                .send(.breeds(.onAppear))
-            )
+            return .send(.breeds(.onAppear))
 
         case .favorites:
             return .send(.favorites(.onAppear))
