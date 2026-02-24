@@ -105,9 +105,6 @@ struct FavoritesView: View {
             }
         }
         .navigationTitle("Favorites")
-        .onAppear {
-            store.send(.onAppear)
-        }
     }
 
     private var averageLifeSpanMax: Double {
