@@ -32,3 +32,25 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - Unit tests and async test patterns in Swift: start with `axiom-ios-testing`, then follow to `swift-testing` when writing concrete tests.
 - Simulator-driven flows, app interaction, UI snapshots, and device automation: use `ios-simulator-skill`.
 - E2E integration strategy and flaky E2E debugging: use `e2e-testing-patterns`.
+
+### Current project notes
+- `BreedDetailView` is the single detail entry point and has two initialization modes:
+  1. Live mode (`breedID + breedsStore + selectedTab`) for breeds-tab synchronization.
+  2. Standalone mode (`state + callback`) for favorites navigation.
+- Cross-tab favorite synchronization currently depends on `AppView.handleTabSelection` and favorites-state change propagation.
+- `ImageLoadService` is actor-based and owns in-memory cache, in-flight task deduplication, and cancellation by subscriber id.
+
+### Regression learnings (do not regress)
+- Keep favorites remove button outside `NavigationLink` tap area in `FavoritesView` rows. Nesting the button inside the link causes tap conflicts and stale state symptoms.
+- When changing tab-sync logic, verify detail state updates after removing a favorite from Favorites and switching back to Breeds.
+- Preserve `RemoteImageView` `activeURL` guard and `CatAPIClient.fetchBreedImage` breed-id mismatch guard to prevent wrong-image assignment.
+
+### Required verification after related changes
+- If touching favorites/detail/tab-sync flows, run:
+  - `xcodebuild -scheme gato -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:gatoUITests/gatoUITests/testBreedDetailFavoriteStateRefreshesAfterRemovingInFavoritesTab test -derivedDataPath /tmp/gato-dd CODE_SIGNING_ALLOWED=NO`
+- If touching image loading, run `ImageLoadServiceTests` and `CatAPIClientTests`.
+
+### Secrets and config policy
+- Never commit secrets.
+- Do not track xcconfig files in source control (`*.xcconfig*` is ignored).
+- Keep local-only API configuration in `Config/*.xcconfig*` and CI secrets in environment variables.

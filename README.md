@@ -1,115 +1,147 @@
 # Gato: Cat Breeds iOS App
 
-`Gato` is a SwiftUI iOS app that uses a TCA-style architecture to browse cat breeds from [The Cat API](https://thecatapi.com/), search locally, favorite breeds, and keep working with cached data when offline.
+`Gato` is a SwiftUI iOS app with a TCA-style reducer/store architecture. It loads breeds from [The Cat API](https://thecatapi.com/), supports search and favorites, and keeps working with cached data offline.
 
 ## Stack
 
-- `SwiftUI` for UI
-- Feature-first, reducer/store architecture (TCA-inspired)
-- `Core Data` persistence (used instead of SwiftData due current build-environment macro limitations)
-- `URLSession` + typed API client for The Cat API
-- `XCTest` + `XCUITest` test suites
-- `OSLog` structured logging (`api`, `persistence`, `ui`)
+- `SwiftUI`
+- Feature reducers + lightweight `Store` (`TCA`-inspired)
+- `Core Data` persistence
+- `URLSession` API/image networking
+- `OSLog` categories: `api`, `persistence`, `ui`
+- `XCTest` + `XCUITest`
 
-## Architecture
+## Current Architecture
 
 ### Features
 
 - `AppFeature`
-  - Root tab navigation
+  - Tab selection state
+  - Cross-tab synchronization hooks
 - `BreedsFeature`
-  - Breeds list
-  - Debounced search
-  - Local pagination state
+  - Cached + remote sync
+  - Debounced local search
+  - Local pagination
   - Favorite toggling
-  - Offline/error states
+  - Breed image hydration
 - `FavoritesFeature`
-  - Favorite-only list
-  - Average lifespan calculation from `lifeSpan.max`
+  - Favorite-only listing
+  - Favorite removal
+  - Average lifespan from `lifeSpan.max`
 - `BreedDetailFeature`
-  - Breed detail presentation model and detail screen
+  - Detail presentation state
+- `BreedDetailView`
+  - Two modes:
+  - Live mode (syncs with `BreedsFeature` store by `breedID`)
+  - Standalone mode (state + callback)
 
 ### Core
 
-- `Core/Models`
-  - `Breed`, `LifeSpanRange`
-- `Core/APIClient`
-  - `CatAPIClient`, request/response mapping, error normalization
-- `Core/Persistence`
-  - `PersistenceClient`, in-memory and on-disk Core Data stores
-- `Core/ImageClient`
-  - URL-request policy for image caching
-- `Core/Logging`
-  - `OSLog` categories
+- `Core/APIClient/CatAPIClient.swift`
+  - Breeds + breed image endpoints
+  - API error mapping
+  - Mismatched image-response guard by breed id
+- `Core/Persistence/PersistenceClient.swift`
+  - Core Data-backed breed/favorite persistence
+- `Core/ImageClient/ImageLoadService.swift`
+  - Actor-based image loading
+  - In-memory image cache
+  - Request deduplication
+  - Subscriber tracking and cancellation
+- `Core/DesignSystem/RemoteImageView.swift`
+  - Cell-safe async image rendering
+  - `activeURL` guard to prevent wrong-image reuse
 
-## Offline-First Strategy
+## Offline and Sync Strategy
 
 Read flow:
-1. Load cached breeds from persistence.
+1. Load cached breeds.
 2. Merge persisted favorites.
-3. Render cached data immediately when present.
-4. Attempt network sync.
+3. Render immediately.
+4. Attempt remote refresh.
 
 Write flow:
-1. Favorite toggles persist first (`PersistenceClient.setFavorite`).
-2. UI updates after persistence confirms success.
+1. Persist favorite toggle first.
+2. Reflect result in reducer state.
+3. Sync favorite state across tabs/views.
 
-If network is offline and cache exists, the app shows an offline banner and continues using cached data.
-If network is offline and cache is empty, the app shows a dedicated offline-empty screen with retry.
+Behavior:
+- Offline + cache available: show cached data with offline banner.
+- Offline + no cache: show fatal offline empty state.
 
 ## Pagination Strategy
 
-The app fetches all remote breeds during sync and applies pagination locally (`pageSize`, `currentPage`, `canLoadMore`) as the user scrolls.
+Breeds are fully synced from API and paginated locally (`pageSize`, `currentPage`, `canLoadMore`).
 
-Why:
-- The Cat API pagination metadata can be inconsistent across environments.
-- Local pagination gives deterministic behavior and strong offline support.
+Reason:
+- More deterministic than relying on remote pagination metadata.
+- Better offline behavior.
 
-## API Key Configuration
+## API Key Setup
 
-Do not commit secrets.
+All `*.xcconfig*` files are intentionally ignored and not tracked.
 
-Files provided:
-- `Config/Debug.xcconfig`
-- `Config/Release.xcconfig`
-- `Config/Secrets.xcconfig.example`
+Create local files:
+1. `Config/Secrets.xcconfig`
+2. `Config/Debug.xcconfig`
+3. `Config/Release.xcconfig`
 
-Setup:
-1. Copy `Config/Secrets.xcconfig.example` to `Config/Secrets.xcconfig`.
-2. Set `THE_CAT_API_KEY`.
-3. Ensure build config includes `CAT_API_KEY` (currently read from `Info.plist` key `CAT_API_KEY` or `CAT_API_KEY` environment variable).
+Recommended contents:
 
-In CI, set `CAT_API_KEY` as a secret environment variable.
+```xcconfig
+// Config/Secrets.xcconfig
+CAT_API_KEY = YOUR_CAT_API_KEY_HERE
+```
 
-## Testing Strategy
+```xcconfig
+// Config/Debug.xcconfig
+#include "Secrets.xcconfig"
+```
+
+```xcconfig
+// Config/Release.xcconfig
+#include "Secrets.xcconfig"
+```
+
+The app reads `CAT_API_KEY` from:
+1. `CAT_API_KEY` environment variable
+2. `Info.plist` key `CAT_API_KEY` (fed from xcconfig)
+
+## Testing
 
 ### Unit tests (`gatoTests`)
-- Reducer behavior (pagination/search/favorite flow)
+- Breeds reducer behavior (search/pagination/favorites/image hydration)
+- Favorites reducer behavior
 - Lifespan parsing
-- Favorites average lifespan logic
+- API client response handling
+- `ImageLoadService` concurrency/cancellation/cache behavior
 
 ### Integration tests (`gatoTests`)
-- Real in-memory persistence + mocked API
-- Sync then offline reload behavior
-- Favorite persistence CRUD
+- Core Data persistence CRUD
+- Online sync then offline reload
 
-### End-to-end UI tests (`gatoUITests`)
-- App launch and breeds list
-- Search flow
-- Favorite/unfavorite flow
-- Favorites average lifespan presence
+### UI tests (`gatoUITests`)
+- Launch + breeds list
+- Search filtering
+- Favorite flow and favorites tab
 - Offline cached browsing
+- Regression: detail favorite state refreshes after favorite removal in Favorites tab
 
-## Known Tradeoffs
+## Important Regressions Prevented
 
-- Uses a lightweight reducer/store implementation instead of importing Point-Free TCA package directly.
-- Core Data used instead of SwiftData because SwiftData macro expansion is not available in this environment.
-- Local pagination after full sync favors deterministic UX and offline support over strict remote paging.
+- Favorite removal must update breed detail state when switching tabs.
+- Favorites remove action must be outside the row `NavigationLink` hit area.
+- Image assignment must be URL-safe for reused cells (`activeURL` check).
+
+## Tradeoffs
+
+- Uses a custom lightweight store instead of importing Point-Free TCA package.
+- Uses Core Data instead of SwiftData in this environment.
+- Local pagination favors determinism/offline over remote paging fidelity.
 
 ## Future Improvements
 
-1. Move to upstream Composable Architecture package when environment supports dependency integration.
-2. Add remote image endpoint enrichment for breeds without image URLs.
-3. Add snapshot tests for key states.
-4. Add pull-to-refresh and background sync scheduling.
-5. Split features/core into local Swift packages once package linking is enabled.
+1. Migrate to upstream TCA package.
+2. Add snapshot tests for key UI states.
+3. Add pull-to-refresh/background refresh.
+4. Split features/core into local Swift packages.
