@@ -7,13 +7,13 @@ struct BreedsView: View {
 
     var body: some View {
         Group {
-            if store.isLoading && store.visibleBreeds.isEmpty {
+            if store.isLoading && store.visibleBreedIDs.isEmpty {
                 loadingView
             } else if store.showFatalOfflineState {
                 fatalOfflineView
-            } else if let errorMessage = store.errorMessage, store.visibleBreeds.isEmpty {
+            } else if let errorMessage = store.errorMessage, store.visibleBreedIDs.isEmpty {
                 errorView(message: errorMessage)
-            } else if store.visibleBreeds.isEmpty {
+            } else if store.visibleBreedIDs.isEmpty {
                 emptyView
             } else {
                 listView
@@ -54,62 +54,33 @@ struct BreedsView: View {
                     .accessibilityIdentifier("offline_banner")
             }
 
-            ForEach(store.visibleBreeds) { breed in
-                NavigationLink {
-                    BreedDetailView(
-                        breedID: breed.id,
-                        breedsStore: store,
-                        imageClient: imageClient
-                    )
-                } label: {
-                    HStack(spacing: 12) {
-                        RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            Image(systemName: "cat.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .padding(10)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(width: 56, height: 56)
-                        .background(Color(.systemGray6))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        Text(breed.name)
-                            .font(.body)
-
-                        Spacer()
-
-                        Button {
+            ForEach(store.visibleBreedIDs, id: \.self) { breedID in
+                if let breed = store.breedsByID[breedID] {
+                    NavigationLink {
+                        BreedDetailView(
+                            breedID: breed.id,
+                            breedsStore: store,
+                            imageClient: imageClient
+                        )
+                    } label: {
+                        BreedListRow(
+                            breed: breed,
+                            isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id),
+                            imageClient: imageClient
+                        ) {
                             store.send(.toggleFavoriteTapped(breed.id))
-                        } label: {
-                            Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
-                                .foregroundStyle(breed.isFavorite ? .red : .secondary)
-                                .frame(width: 44, height: 44)
                         }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
-                        .accessibilityIdentifier("favorite_\(breed.id)")
-                        .disabled(store.favoriteToggleInFlight.contains(breed.id))
+                        .equatable()
                     }
-                }
-                .contentShape(Rectangle())
-                .onAppear {
-                    store.send(.breedRowAppeared(breed.id))
+                    .contentShape(Rectangle())
+                    .onAppear {
+                        store.send(.breedRowAppeared(breed.id))
+                    }
                 }
             }
         }
         .listStyle(.plain)
         .accessibilityIdentifier("breeds_list")
-        .onAppear {
-            prefetchVisibleBreedsForImageHydration()
-        }
-        .onChange(of: store.visibleBreedIDs) { _, _ in
-            prefetchVisibleBreedsForImageHydration()
-        }
     }
 
     private var loadingView: some View {
@@ -173,8 +144,51 @@ struct BreedsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
-    private func prefetchVisibleBreedsForImageHydration() {
-        store.send(.prefetchRequested(Array(store.visibleBreedIDs.prefix(12))))
+private struct BreedListRow: View, Equatable {
+    let breed: Breed
+    let isFavoriteToggleInFlight: Bool
+    let imageClient: ImageClient
+    let onToggleFavorite: () -> Void
+
+    static func == (lhs: BreedListRow, rhs: BreedListRow) -> Bool {
+        lhs.breed == rhs.breed && lhs.isFavoriteToggleInFlight == rhs.isFavoriteToggleInFlight
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                Image(systemName: "cat.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(10)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 56, height: 56)
+            .background(Color(.systemGray6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            Text(breed.name)
+                .font(.body)
+
+            Spacer()
+
+            Button {
+                onToggleFavorite()
+            } label: {
+                Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
+                    .foregroundStyle(breed.isFavorite ? .red : .secondary)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
+            .accessibilityIdentifier("favorite_\(breed.id)")
+            .disabled(isFavoriteToggleInFlight)
+        }
     }
 }
