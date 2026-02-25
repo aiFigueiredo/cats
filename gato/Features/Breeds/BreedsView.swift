@@ -19,7 +19,7 @@ struct BreedsView: View {
                 gridView
             }
         }
-        .navigationTitle("Cats List")
+        .navigationTitle("Cats App")
         .searchable(
             text: Binding(
                 get: { store.searchQuery },
