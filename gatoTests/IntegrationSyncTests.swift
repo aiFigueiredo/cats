@@ -44,6 +44,7 @@ struct IntegrationSyncTests {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
             $0.orderedBreedIDs = sortedExpected.map(\.id)
             $0.filteredBreedIDs = sortedExpected.map(\.id)
+            $0.visibleBreedIDs = sortedExpected.map(\.id)
             $0.visibleCount = 2
             $0.canLoadMore = false
         }
@@ -69,6 +70,7 @@ struct IntegrationSyncTests {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
             $0.orderedBreedIDs = sortedExpected.map(\.id)
             $0.filteredBreedIDs = sortedExpected.map(\.id)
+            $0.visibleBreedIDs = sortedExpected.map(\.id)
             $0.visibleCount = 2
             $0.canLoadMore = false
         }
@@ -102,6 +104,26 @@ struct IntegrationSyncTests {
 
         #expect(try persistence.loadFavoriteIDs() == [])
         #expect(!(try persistence.isFavorite("abys")))
+    }
+
+    @Test("loadFavorites returns only favorite breeds sorted by name")
+    func loadFavoritesReturnsOnlyFavoriteBreedsSortedByName() throws {
+        let store = PersistenceStore.inMemory()
+        let persistence = PersistenceClient.live(context: store.container.viewContext)
+
+        let breeds = [
+            Breed(id: "beng", name: "Bengal", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false),
+            Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false),
+            Breed(id: "birm", name: "Birman", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        ]
+
+        try persistence.upsertBreeds(breeds, Date())
+        try persistence.setFavorite("birm", true)
+        try persistence.setFavorite("abys", true)
+
+        let favorites = try persistence.loadFavorites()
+        #expect(favorites.map(\.id) == ["abys", "birm"])
+        #expect(favorites.allSatisfy { $0.isFavorite })
     }
 
     @Test("upsert preserves existing image URL when incoming payload omits image")

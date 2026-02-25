@@ -48,20 +48,16 @@ struct FavoritesView: View {
                         ForEach(store.favorites) { breed in
                             HStack(spacing: 12) {
                                 NavigationLink {
-                                    if let currentBreed = store.favorites.first(where: { $0.id == breed.id }) {
-                                        BreedDetailView(
-                                            state: BreedDetailFeature.State(
-                                                breed: currentBreed,
-                                                isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id)
-                                            ),
-                                            imageClient: imageClient,
-                                            onToggleFavorite: {
-                                                store.send(.toggleFavoriteTapped(breed.id))
-                                            }
-                                        )
-                                    } else {
-                                        Text("Breed unavailable")
-                                    }
+                                    BreedDetailView(
+                                        state: BreedDetailFeature.State(
+                                            breed: breed,
+                                            isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id)
+                                        ),
+                                        imageClient: imageClient,
+                                        onToggleFavorite: {
+                                            store.send(.toggleFavoriteTapped(breed.id))
+                                        }
+                                    )
                                 } label: {
                                     HStack(spacing: 12) {
                                         RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in

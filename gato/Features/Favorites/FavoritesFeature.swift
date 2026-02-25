@@ -60,14 +60,12 @@ struct FavoritesFeature {
     }
 
     private func loadFavoritesEffect() -> Effect<Action> {
-        let loadBreeds = self.persistenceClient.loadBreeds
+        let loadFavorites = self.persistenceClient.loadFavorites
 
         return .run { send in
             do {
-                let breeds = try loadBreeds()
-                    .filter(\.isFavorite)
-                    .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-                await send(.favoritesLoaded(breeds))
+                let favorites = try loadFavorites()
+                await send(.favoritesLoaded(favorites))
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? "Failed to load favorites."
                 await send(.loadFailed(message))
