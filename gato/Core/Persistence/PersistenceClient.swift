@@ -4,8 +4,10 @@ import Foundation
 
 struct PersistenceClient {
     var loadBreeds: () throws -> [Breed]
+    var loadFavorites: () throws -> [Breed]
     var upsertBreeds: (_ breeds: [Breed], _ now: Date) throws -> Void
     var updateBreedImage: (_ breedID: String, _ imageURL: URL?) throws -> Void
+    var updateBreedImagesBatch: (_ updates: [String: URL?], _ now: Date) throws -> Void
     var loadFavoriteIDs: () throws -> Set<String>
     var setFavorite: (_ breedID: String, _ isFavorite: Bool) throws -> Void
     var isFavorite: (_ breedID: String) throws -> Bool
@@ -28,8 +30,7 @@ extension PersistenceClient {
             loadBreeds: {
                 do {
                     return try context.performSync {
-                        let favorites = try context.fetch(CDFavorite.fetchRequest())
-                        let favoriteIDs = Set(favorites.map(\.breedID))
+                        let favoriteIDs = try loadFavoriteIDsSet(context: context)
 
                         let request = CDBreed.fetchRequest()
                         request.sortDescriptors = [NSSortDescriptor(key: #keyPath(CDBreed.name), ascending: true)]
@@ -38,6 +39,23 @@ extension PersistenceClient {
                 } catch {
                     AppLogger.persistence.error("loadBreeds failed: \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed loading breeds: \(error.localizedDescription)")
+                }
+            },
+            loadFavorites: {
+                do {
+                    return try context.performSync {
+                        let favoriteIDs = try loadFavoriteIDsSet(context: context)
+                        guard !favoriteIDs.isEmpty else { return [] }
+
+                        let request = CDBreed.fetchRequest()
+                        request.predicate = NSPredicate(format: "id IN %@", Array(favoriteIDs))
+                        request.sortDescriptors = [NSSortDescriptor(key: #keyPath(CDBreed.name), ascending: true)]
+
+                        return try context.fetch(request).map { $0.toDomain(isFavorite: true) }
+                    }
+                } catch {
+                    AppLogger.persistence.error("loadFavorites failed: \(error.localizedDescription, privacy: .public)")
+                    throw PersistenceError.failed("Failed loading favorites: \(error.localizedDescription)")
                 }
             },
             upsertBreeds: { breeds, now in
@@ -82,30 +100,23 @@ extension PersistenceClient {
             },
             updateBreedImage: { breedID, imageURL in
                 do {
-                    try context.performSync {
-                        let request = CDBreed.fetchRequest()
-                        request.predicate = NSPredicate(format: "id == %@", breedID)
-                        request.fetchLimit = 1
-
-                        guard let managed = try context.fetch(request).first else {
-                            return
-                        }
-
-                        managed.imageURL = imageURL?.absoluteString
-                        managed.lastUpdatedAt = Date()
-
-                        if context.hasChanges {
-                            try context.save()
-                        }
-                    }
+                    try writeBreedImageUpdates(context: context, updates: [breedID: imageURL], now: Date())
                 } catch {
                     AppLogger.persistence.error("updateBreedImage failed for \(breedID, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed updating breed image: \(error.localizedDescription)")
                 }
             },
+            updateBreedImagesBatch: { updates, now in
+                do {
+                    try writeBreedImageUpdates(context: context, updates: updates, now: now)
+                } catch {
+                    AppLogger.persistence.error("updateBreedImagesBatch failed: \(error.localizedDescription, privacy: .public)")
+                    throw PersistenceError.failed("Failed updating breed images: \(error.localizedDescription)")
+                }
+            },
             loadFavoriteIDs: {
                 do {
-                    return try loadFavorites(context: context)
+                    return try loadFavoriteIDsSet(context: context)
                 } catch {
                     AppLogger.persistence.error("loadFavoriteIDs failed: \(error.localizedDescription, privacy: .public)")
                     throw PersistenceError.failed("Failed loading favorites: \(error.localizedDescription)")
@@ -156,10 +167,36 @@ extension PersistenceClient {
     }
 }
 
-private func loadFavorites(context: NSManagedObjectContext) throws -> Set<String> {
+private func loadFavoriteIDsSet(context: NSManagedObjectContext) throws -> Set<String> {
     try context.performSync {
         let favorites = try context.fetch(CDFavorite.fetchRequest())
         return Set(favorites.map(\.breedID))
+    }
+}
+
+private func writeBreedImageUpdates(
+    context: NSManagedObjectContext,
+    updates: [String: URL?],
+    now: Date
+) throws {
+    try context.performSync {
+        guard !updates.isEmpty else { return }
+
+        let request = CDBreed.fetchRequest()
+        request.predicate = NSPredicate(format: "id IN %@", Array(updates.keys))
+
+        let managedBreeds = try context.fetch(request)
+        let managedByID = Dictionary(uniqueKeysWithValues: managedBreeds.map { ($0.id, $0) })
+
+        for (breedID, imageURL) in updates {
+            guard let managed = managedByID[breedID] else { continue }
+            managed.imageURL = imageURL?.absoluteString
+            managed.lastUpdatedAt = now
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
     }
 }
 
@@ -176,7 +213,7 @@ private extension CDBreed {
             temperament: temperament,
             description: breedDescription,
             lifeSpan: lifeSpan,
-            imageURL: URL(string: imageURL ?? ""),
+            imageURL: imageURL.flatMap(URL.init(string:)),
             isFavorite: isFavorite
         )
     }
