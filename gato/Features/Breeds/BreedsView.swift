@@ -16,17 +16,17 @@ struct BreedsView: View {
             } else if store.visibleBreedIDs.isEmpty {
                 emptyView
             } else {
-                listView
+                gridView
             }
         }
-        .navigationTitle("Breeds")
+        .navigationTitle("Cats List")
         .searchable(
             text: Binding(
                 get: { store.searchQuery },
                 set: { store.send(.searchQueryChanged($0)) }
             ),
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search breeds"
+            prompt: "Search cats"
         )
         .overlay(alignment: .top) {
             if let banner = store.bannerMessage {
@@ -37,7 +37,7 @@ struct BreedsView: View {
                     .background(.ultraThinMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.top, 8)
-                    .accessibilityIdentifier("breeds_error_banner")
+                    .accessibilityIdentifier("cats_error_banner")
                     .onTapGesture {
                         store.send(.dismissBanner)
                     }
@@ -45,56 +45,67 @@ struct BreedsView: View {
         }
     }
 
-    private var listView: some View {
-        List {
-            if store.isOfflineMode {
-                Text("Offline mode: showing cached data.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("offline_banner")
-            }
+    private var gridView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if store.isOfflineMode {
+                    Text("Offline mode: showing cached data.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("offline_banner")
+                }
 
-            ForEach(store.visibleBreedIDs, id: \.self) { breedID in
-                if let breed = store.breedsByID[breedID] {
-                    NavigationLink {
-                        BreedDetailView(
-                            breedID: breed.id,
-                            breedsStore: store,
-                            imageClient: imageClient
-                        )
-                    } label: {
-                        BreedListRow(
-                            breed: breed,
-                            isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id),
-                            imageClient: imageClient
-                        ) {
-                            store.send(.toggleFavoriteTapped(breed.id))
-                        }
-                        .equatable()
-                    }
-                    .contentShape(Rectangle())
-                    .onAppear {
-                        if breed.imageURL == nil {
-                            store.send(.breedRowAppeared(breed.id))
-                        }
-                        if store.canLoadMore, breed.id == store.visibleBreedIDs.last {
-                            store.send(.loadNextPage)
+                LazyVGrid(columns: gridColumns, spacing: 16) {
+                    ForEach(store.visibleBreedIDs, id: \.self) { breedID in
+                        if let breed = store.breedsByID[breedID] {
+                            VStack(spacing: 8) {
+                                NavigationLink {
+                                    BreedDetailView(
+                                        breedID: breed.id,
+                                        breedsStore: store,
+                                        imageClient: imageClient
+                                    )
+                                } label: {
+                                    BreedGridTileContent(
+                                        breed: breed,
+                                        imageClient: imageClient,
+                                        onFavorite: {
+                                            store.send(.toggleFavoriteTapped(breed.id))
+                                        }
+                                    )
+                                    .equatable()
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .onAppear {
+                                if breed.imageURL == nil {
+                                    store.send(.breedRowAppeared(breed.id))
+                                }
+                                if store.canLoadMore, breed.id == store.visibleBreedIDs.last {
+                                    store.send(.loadNextPage)
+                                }
+                            }
                         }
                     }
                 }
             }
+            .padding(.horizontal)
         }
-        .listStyle(.plain)
         .transaction { transaction in
             transaction.animation = nil
         }
-        .accessibilityIdentifier("breeds_list")
+        .accessibilityIdentifier("cats_list")
+    }
+
+    private var gridColumns: [GridItem] {
+        let columnCount = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount)
     }
 
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-            Text("Loading breeds...")
+            Text("Loading cats...")
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -102,7 +113,7 @@ struct BreedsView: View {
 
     private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
-            Text("Could not load breeds")
+            Text("Could not load cats")
                 .font(.headline)
             Text(message)
                 .font(.subheadline)
@@ -120,7 +131,7 @@ struct BreedsView: View {
 
     private var emptyView: some View {
         VStack(spacing: 16) {
-            Text("No breeds available")
+            Text("No cats available")
                 .font(.headline)
             Text("Pull to refresh or try again later.")
                 .foregroundStyle(.secondary)
@@ -133,13 +144,13 @@ struct BreedsView: View {
     }
 
     private var fatalOfflineView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
             Text("You are offline")
                 .font(.headline)
-            Text("No cached breeds are available yet. Connect to the internet and try again.")
+            Text("No cached cats are available yet. Connect to the internet and try again.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -151,52 +162,5 @@ struct BreedsView: View {
             .accessibilityIdentifier("retry_button")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct BreedListRow: View, Equatable {
-    let breed: Breed
-    let isFavoriteToggleInFlight: Bool
-    let imageClient: ImageClient
-    let onToggleFavorite: () -> Void
-
-    static func == (lhs: BreedListRow, rhs: BreedListRow) -> Bool {
-        lhs.breed == rhs.breed && lhs.isFavoriteToggleInFlight == rhs.isFavoriteToggleInFlight
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                Image(systemName: "cat.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .padding(10)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 56, height: 56)
-            .background(Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            Text(breed.name)
-                .font(.body)
-
-            Spacer()
-
-            Button {
-                onToggleFavorite()
-            } label: {
-                Image(systemName: breed.isFavorite ? "heart.fill" : "heart")
-                    .foregroundStyle(breed.isFavorite ? .red : .secondary)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
-            .accessibilityIdentifier("favorite_\(breed.id)")
-            .disabled(isFavoriteToggleInFlight)
-        }
     }
 }

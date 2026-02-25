@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct RemoteImageView<Content: View, Placeholder: View>: View {
     let url: URL?

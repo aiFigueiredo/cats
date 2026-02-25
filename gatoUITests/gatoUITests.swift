@@ -10,7 +10,11 @@ final class gatoUITests: XCTestCase {
         let app = launchApp()
 
         XCTAssertTrue(app.navigationBars["Breeds"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.collectionViews["breeds_list"].waitForExistence(timeout: 5) || app.tables["breeds_list"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.scrollViews["breeds_list"].waitForExistence(timeout: 5)
+            || app.collectionViews["breeds_list"].waitForExistence(timeout: 5)
+            || app.tables["breeds_list"].waitForExistence(timeout: 5)
+        )
         XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
     }
 
@@ -37,9 +41,13 @@ final class gatoUITests: XCTestCase {
 
         app.tabBars.buttons["Favorites"].tap()
 
-        XCTAssertTrue(app.tables["favorites_list"].waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.scrollViews["favorites_list"].waitForExistence(timeout: 5)
+            || app.collectionViews["favorites_list"].waitForExistence(timeout: 5)
+            || app.tables["favorites_list"].waitForExistence(timeout: 5)
+        )
         XCTAssertTrue(app.staticTexts["Abyssinian"].exists)
-        XCTAssertTrue(app.otherElements["favorites_average_lifespan"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["favorites_average_lifespan"].exists)
     }
 
     @MainActor

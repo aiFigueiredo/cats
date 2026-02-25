@@ -17,7 +17,7 @@ struct AppView: View {
                 )
             }
             .tabItem {
-                Label("Breeds", systemImage: "cat")
+                Label("Cats List", systemImage: "cat")
             }
             .tag(AppTab.breeds)
 
@@ -28,7 +28,7 @@ struct AppView: View {
                 )
             }
             .tabItem {
-                Label("Favorites", systemImage: "heart.fill")
+                Label("Favorites", systemImage: "star.fill")
             }
             .tag(AppTab.favorites)
         }

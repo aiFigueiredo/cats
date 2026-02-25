@@ -27,80 +27,64 @@ struct FavoritesView: View {
                 VStack(spacing: 12) {
                     Text("No favorites yet")
                         .font(.headline)
-                    Text("Heart a breed from the Breeds tab to see it here.")
+                    Text("Star a breed from the Breeds tab to see it here.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
             } else {
-                List {
-                    Section {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("Average lifespan")
                             Spacer()
                             Text(String(format: "%.1f years", averageLifeSpanMax))
                                 .fontWeight(.semibold)
                         }
+                        .padding(12)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                         .accessibilityIdentifier("favorites_average_lifespan")
-                    }
 
-                    Section("Favorites") {
-                        ForEach(store.favorites) { breed in
-                            HStack(spacing: 12) {
-                                NavigationLink {
-                                    BreedDetailView(
-                                        state: BreedDetailFeature.State(
+                        LazyVGrid(columns: gridColumns, spacing: 16) {
+                            ForEach(store.favorites) { breed in
+                                VStack(spacing: 8) {
+                                    NavigationLink {
+                                        BreedDetailView(
+                                            state: BreedDetailFeature.State(
+                                                breed: breed,
+                                                isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id)
+                                            ),
+                                            imageClient: imageClient,
+                                            onToggleFavorite: {
+                                                store.send(.toggleFavoriteTapped(breed.id))
+                                            }
+                                        )
+                                    } label: {
+                                        BreedGridTileContent(
                                             breed: breed,
-                                            isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id)
-                                        ),
-                                        imageClient: imageClient,
-                                        onToggleFavorite: {
-                                            store.send(.toggleFavoriteTapped(breed.id))
-                                        }
-                                    )
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        RemoteImageView(url: breed.imageURL, imageClient: imageClient) { image in
-                                            image
-                                                .resizable()
-                                                .scaledToFill()
-                                        } placeholder: {
-                                            Image(systemName: "cat.fill")
-                                                .resizable()
-                                                .scaledToFit()
-                                                .padding(10)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .frame(width: 48, height: 48)
-                                        .background(Color(.systemGray6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                                        Text(breed.name)
-
-                                        Spacer()
+                                            imageClient: imageClient,
+                                            onFavorite: {
+                                                store.send(.toggleFavoriteTapped(breed.id))
+                                            }
+                                        )
                                     }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
-
-                                Button {
-                                    store.send(.toggleFavoriteTapped(breed.id))
-                                } label: {
-                                    Image(systemName: "heart.fill")
-                                        .foregroundStyle(.red)
-                                        .frame(width: 44, height: 44)
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(store.favoriteToggleInFlight.contains(breed.id))
-                                .accessibilityIdentifier("remove_favorite_\(breed.id)")
                             }
                         }
                     }
+                    .padding(.horizontal)
                 }
-                .listStyle(.insetGrouped)
                 .accessibilityIdentifier("favorites_list")
             }
         }
         .navigationTitle("Favorites")
+    }
+
+    private var gridColumns: [GridItem] {
+        let columnCount = UIDevice.current.userInterfaceIdiom == .pad ? 4 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount)
     }
 
     private var averageLifeSpanMax: Double {
