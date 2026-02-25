@@ -31,11 +31,17 @@ extension PersistenceClient {
             loadBreeds: {
                 throw DependencyFailure.unimplemented("\(label).loadBreeds")
             },
+            loadFavorites: {
+                throw DependencyFailure.unimplemented("\(label).loadFavorites")
+            },
             upsertBreeds: { _, _ in
                 throw DependencyFailure.unimplemented("\(label).upsertBreeds")
             },
             updateBreedImage: { _, _ in
                 throw DependencyFailure.unimplemented("\(label).updateBreedImage")
+            },
+            updateBreedImagesBatch: { _, _ in
+                throw DependencyFailure.unimplemented("\(label).updateBreedImagesBatch")
             },
             loadFavoriteIDs: {
                 throw DependencyFailure.unimplemented("\(label).loadFavoriteIDs")
