@@ -18,8 +18,6 @@ struct AppFeature {
     enum Action: Equatable {
         case appStarted
         case tabSelected(AppTab)
-        case breedsTabBecameActive
-        case favoritesTabBecameActive
         case breeds(BreedsFeature.Action)
         case favorites(FavoritesFeature.Action)
     }
@@ -42,12 +40,6 @@ struct AppFeature {
                 guard state.selectedTab != tab else { return .none }
                 state.selectedTab = tab
                 return activationEffect(for: tab)
-
-            case .breedsTabBecameActive:
-                return activationEffect(for: .breeds)
-
-            case .favoritesTabBecameActive:
-                return activationEffect(for: .favorites)
 
             case .favorites(.favoritesLoaded), .favorites(.favoritePersisted):
                 let favoriteIDs = Set(state.favorites.favorites.map(\.id))
