@@ -73,10 +73,15 @@ struct BreedsView: View {
                         .equatable()
                     }
                     .contentShape(Rectangle())
-                    .onAppear {
-                        store.send(.breedRowAppeared(breed.id))
-                    }
                 }
+            }
+
+            if store.canLoadMore {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .onAppear {
+                        store.send(.loadNextPage)
+                    }
             }
         }
         .listStyle(.plain)

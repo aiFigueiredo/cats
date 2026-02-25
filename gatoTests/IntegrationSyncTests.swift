@@ -41,12 +41,30 @@ struct IntegrationSyncTests {
             $0.isLoading = false
             $0.isOfflineMode = false
             $0.showFatalOfflineState = false
+            $0.preparationGeneration = 1
+            $0.pendingPreparedBreedsCount = sortedExpected.count
+        }
+
+        await onlineStore.receive(
+            .preparedBreedsViewState(
+                BreedsFeature.PreparedBreedsViewState(
+                    breedsByID: Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) }),
+                    orderedBreedIDs: sortedExpected.map(\.id),
+                    filteredBreedIDs: sortedExpected.map(\.id),
+                    visibleBreedIDs: sortedExpected.map(\.id),
+                    visibleCount: 2,
+                    canLoadMore: false
+                ),
+                1
+            )
+        ) {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
             $0.orderedBreedIDs = sortedExpected.map(\.id)
             $0.filteredBreedIDs = sortedExpected.map(\.id)
             $0.visibleBreedIDs = sortedExpected.map(\.id)
             $0.visibleCount = 2
             $0.canLoadMore = false
+            $0.pendingPreparedBreedsCount = 0
         }
 
         let offlineStore = TestStore(initialState: BreedsFeature.State()) {
@@ -67,18 +85,36 @@ struct IntegrationSyncTests {
         }
 
         await offlineStore.receive(.cachedBreedsLoaded(sortedExpected)) {
-            $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
-            $0.orderedBreedIDs = sortedExpected.map(\.id)
-            $0.filteredBreedIDs = sortedExpected.map(\.id)
-            $0.visibleBreedIDs = sortedExpected.map(\.id)
-            $0.visibleCount = 2
-            $0.canLoadMore = false
+            $0.preparationGeneration = 1
+            $0.pendingPreparedBreedsCount = sortedExpected.count
         }
 
         await offlineStore.receive(.networkFailed("No internet connection.", true)) {
             $0.isLoading = false
             $0.bannerMessage = "Offline mode: showing cached data."
             $0.isOfflineMode = true
+        }
+
+        await offlineStore.receive(
+            .preparedBreedsViewState(
+                BreedsFeature.PreparedBreedsViewState(
+                    breedsByID: Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) }),
+                    orderedBreedIDs: sortedExpected.map(\.id),
+                    filteredBreedIDs: sortedExpected.map(\.id),
+                    visibleBreedIDs: sortedExpected.map(\.id),
+                    visibleCount: 2,
+                    canLoadMore: false
+                ),
+                1
+            )
+        ) {
+            $0.breedsByID = Dictionary(uniqueKeysWithValues: sortedExpected.map { ($0.id, $0) })
+            $0.orderedBreedIDs = sortedExpected.map(\.id)
+            $0.filteredBreedIDs = sortedExpected.map(\.id)
+            $0.visibleBreedIDs = sortedExpected.map(\.id)
+            $0.visibleCount = 2
+            $0.canLoadMore = false
+            $0.pendingPreparedBreedsCount = 0
         }
 
         #expect(Set(offlineStore.state.breedsByID.keys) == Set(expectedBreeds.map(\.id)))

@@ -31,10 +31,21 @@ struct BreedsFeature {
         var pendingImageHydrationHead = 0
         var maxConcurrentHydrations = 4
         var pendingImagePersistence: [Breed.ID: URL] = [:]
+        var preparationGeneration = 0
+        var pendingPreparedBreedsCount = 0
 
         var visibleBreeds: [Breed] {
             visibleBreedIDs.compactMap { breedsByID[$0] }
         }
+    }
+
+    struct PreparedBreedsViewState: Equatable, Sendable {
+        var breedsByID: [Breed.ID: Breed]
+        var orderedBreedIDs: [Breed.ID]
+        var filteredBreedIDs: [Breed.ID]
+        var visibleBreedIDs: [Breed.ID]
+        var visibleCount: Int
+        var canLoadMore: Bool
     }
 
     enum Action: Equatable {
@@ -42,7 +53,6 @@ struct BreedsFeature {
         case retryTapped
         case dismissBanner
         case toggleFavoriteTapped(String)
-        case breedRowAppeared(String)
         case flushPendingImagePersistence
         case favoriteFlagsRefreshed(Set<String>)
         case breedImageHydrated(String, URL?)
@@ -52,6 +62,7 @@ struct BreedsFeature {
 
         case cachedBreedsLoaded([Breed])
         case networkBreedsLoaded([Breed])
+        case preparedBreedsViewState(PreparedBreedsViewState, Int)
         case networkFailed(String, Bool)
 
         case favoritePersisted(String, Bool)
@@ -117,15 +128,6 @@ struct BreedsFeature {
                 state.bannerMessage = message
                 return .none
 
-            case .breedRowAppeared(let breedID):
-                if state.canLoadMore, let index = state.visibleBreedIDs.firstIndex(of: breedID) {
-                    let thresholdIndex = max(state.visibleBreedIDs.count - 5, 0)
-                    if index >= thresholdIndex {
-                        return .send(.loadNextPage)
-                    }
-                }
-                return .none
-
             case .flushPendingImagePersistence:
                 let cancelScheduledFlush = Effect<Action>.cancel(id: "image-persistence-flush")
                 guard !state.pendingImagePersistence.isEmpty else { return .none }
@@ -165,29 +167,41 @@ struct BreedsFeature {
                 .cancellable(id: "breeds-search-debounce", cancelInFlight: true)
 
             case .applySearchDebounced:
-                recomputeFilter(state: &state, resetPagination: true)
-                enqueueVisibleImageHydration(state: &state)
-                return .merge(drainHydrationQueue(state: &state))
+                let breeds = state.orderedBreedIDs.compactMap { state.breedsByID[$0] }
+                return scheduleBreedsPreparation(state: &state, breeds: breeds)
 
             case .cachedBreedsLoaded(let breeds):
-                applyLoadedBreeds(state: &state, breeds: breeds)
-                enqueueVisibleImageHydration(state: &state)
-                return .merge(drainHydrationQueue(state: &state))
+                return scheduleBreedsPreparation(state: &state, breeds: breeds)
 
             case .networkBreedsLoaded(let breeds):
                 state.isLoading = false
                 state.isOfflineMode = false
                 state.showFatalOfflineState = false
-                applyLoadedBreeds(state: &state, breeds: breeds)
+                return scheduleBreedsPreparation(state: &state, breeds: breeds)
+
+            case let .preparedBreedsViewState(prepared, generation):
+                guard generation == state.preparationGeneration else { return .none }
+                state.breedsByID = prepared.breedsByID
+                state.orderedBreedIDs = prepared.orderedBreedIDs
+                state.filteredBreedIDs = prepared.filteredBreedIDs
+                state.visibleBreedIDs = prepared.visibleBreedIDs
+                state.visibleCount = prepared.visibleCount
+                state.canLoadMore = prepared.canLoadMore
+                state.pendingPreparedBreedsCount = 0
+                resetHydrationQueue(state: &state)
+                state.pendingImagePersistence.removeAll(keepingCapacity: true)
+                state.imageHydrationInFlight = state.imageHydrationInFlight.intersection(Set(state.orderedBreedIDs))
                 enqueueVisibleImageHydration(state: &state)
                 return .merge(drainHydrationQueue(state: &state))
 
             case .networkFailed(let message, let isOffline):
                 state.isLoading = false
-                if state.visibleBreedIDs.isEmpty {
+                if state.visibleBreedIDs.isEmpty, state.pendingPreparedBreedsCount == 0 {
                     state.errorMessage = message
                     state.showFatalOfflineState = isOffline
                 } else {
+                    state.errorMessage = nil
+                    state.showFatalOfflineState = false
                     state.bannerMessage = isOffline ? "Offline mode: showing cached data." : message
                     state.isOfflineMode = isOffline
                 }
@@ -214,6 +228,26 @@ struct BreedsFeature {
             await send(.flushPendingImagePersistence)
         }
         .cancellable(id: "image-persistence-flush", cancelInFlight: true)
+    }
+
+    private func scheduleBreedsPreparation(state: inout State, breeds: [Breed]) -> Effect<Action> {
+        state.preparationGeneration &+= 1
+        state.pendingPreparedBreedsCount = breeds.count
+        let generation = state.preparationGeneration
+        let query = state.searchQuery
+        let pageSize = state.pageSize
+
+        return .run { send in
+            let prepared = await Task.detached(priority: .userInitiated) {
+                Self.prepareBreedsViewState(
+                    breeds: breeds,
+                    searchQuery: query,
+                    pageSize: pageSize
+                )
+            }.value
+            await send(.preparedBreedsViewState(prepared, generation))
+        }
+        .cancellable(id: "breeds-prepare", cancelInFlight: true)
     }
 
     private func loadBreedsEffect() -> Effect<Action> {
@@ -270,16 +304,6 @@ struct BreedsFeature {
         }
     }
 
-    private func applyLoadedBreeds(state: inout State, breeds: [Breed]) {
-        let sorted = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        state.orderedBreedIDs = sorted.map(\.id)
-        state.breedsByID = Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) })
-        resetHydrationQueue(state: &state)
-        state.pendingImagePersistence.removeAll(keepingCapacity: true)
-        state.imageHydrationInFlight = state.imageHydrationInFlight.intersection(Set(state.orderedBreedIDs))
-        recomputeFilter(state: &state, resetPagination: true)
-    }
-
     private func setFavorite(state: inout State, breedID: String, isFavorite: Bool) {
         guard var breed = state.breedsByID[breedID] else { return }
         if breed.isFavorite != isFavorite {
@@ -305,27 +329,6 @@ struct BreedsFeature {
                 breed.isFavorite = shouldBeFavorite
                 state.breedsByID[id] = breed
             }
-        }
-    }
-
-    private func recomputeFilter(state: inout State, resetPagination: Bool) {
-        let query = state.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty {
-            state.filteredBreedIDs = state.orderedBreedIDs
-        } else {
-            state.filteredBreedIDs = state.orderedBreedIDs.filter { id in
-                guard let breed = state.breedsByID[id] else { return false }
-                return breed.name.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-            }
-        }
-
-        if resetPagination {
-            state.visibleCount = 0
-            appendNextPage(state: &state)
-        } else {
-            state.visibleCount = min(state.visibleCount, state.filteredBreedIDs.count)
-            state.canLoadMore = state.visibleCount < state.filteredBreedIDs.count
-            refreshVisibleWindow(state: &state)
         }
     }
 
@@ -433,5 +436,38 @@ struct BreedsFeature {
         }
 
         return allBreeds
+    }
+
+    nonisolated private static func prepareBreedsViewState(
+        breeds: [Breed],
+        searchQuery: String,
+        pageSize: Int
+    ) -> PreparedBreedsViewState {
+        let sorted = breeds.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let orderedBreedIDs = sorted.map(\.id)
+        let breedsByID = Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) })
+
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredBreedIDs: [Breed.ID]
+        if query.isEmpty {
+            filteredBreedIDs = orderedBreedIDs
+        } else {
+            filteredBreedIDs = orderedBreedIDs.filter { id in
+                guard let breed = breedsByID[id] else { return false }
+                return breed.name.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
+        }
+
+        let visibleCount = min(pageSize, filteredBreedIDs.count)
+        let visibleBreedIDs = Array(filteredBreedIDs.prefix(visibleCount))
+
+        return PreparedBreedsViewState(
+            breedsByID: breedsByID,
+            orderedBreedIDs: orderedBreedIDs,
+            filteredBreedIDs: filteredBreedIDs,
+            visibleBreedIDs: visibleBreedIDs,
+            visibleCount: visibleCount,
+            canLoadMore: visibleCount < filteredBreedIDs.count
+        )
     }
 }

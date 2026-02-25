@@ -7,15 +7,17 @@ struct AppDependencies {
     let imageClient: ImageClient
 
     static func live(context: NSManagedObjectContext) -> AppDependencies {
-        AppDependencies(
+        let workerContext = context.makePersistenceWorkerContext()
+        return AppDependencies(
             apiClient: .live(),
-            persistenceClient: .live(context: context),
+            persistenceClient: .live(context: workerContext),
             imageClient: .live
         )
     }
 
     static func uiTest(context: NSManagedObjectContext, environment: [String: String]) -> AppDependencies {
-        let persistenceClient = PersistenceClient.live(context: context)
+        let workerContext = context.makePersistenceWorkerContext()
+        let persistenceClient = PersistenceClient.live(context: workerContext)
         let fixtures = uiTestFixtureBreeds
 
         if environment["UI_TEST_PRELOAD_CACHE"] == "1" {
@@ -40,6 +42,20 @@ struct AppDependencies {
             persistenceClient: persistenceClient,
             imageClient: .live
         )
+    }
+}
+
+private extension NSManagedObjectContext {
+    func makePersistenceWorkerContext() -> NSManagedObjectContext {
+        guard let coordinator = persistentStoreCoordinator else {
+            return self
+        }
+
+        let worker = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        worker.persistentStoreCoordinator = coordinator
+        worker.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        worker.undoManager = nil
+        return worker
     }
 }
 

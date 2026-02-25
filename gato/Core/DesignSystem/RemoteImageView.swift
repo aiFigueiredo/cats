@@ -33,6 +33,10 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
             }
         }
         .task(id: url) {
+            if activeURL == url, image != nil {
+                return
+            }
+
             let urlDidChange = activeURL != url
             if urlDidChange {
                 cancelLoading()
@@ -41,7 +45,9 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
             startLoading(for: url)
         }
         .onDisappear {
-            cancelLoading()
+            if loadTask != nil {
+                cancelLoading()
+            }
         }
     }
 
@@ -49,6 +55,11 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
         guard let url else {
             activeURL = nil
             image = nil
+            subscriptionID = nil
+            return
+        }
+
+        if activeURL == url, image != nil {
             return
         }
 
@@ -79,6 +90,7 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
 
             await MainActor.run {
                 self.loadTask = nil
+                self.subscriptionID = nil
             }
         }
     }

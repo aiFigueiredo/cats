@@ -33,12 +33,30 @@ struct BreedsFeatureTests {
         }
 
         await store.send(.cachedBreedsLoaded(breeds)) {
+            $0.preparationGeneration = 1
+            $0.pendingPreparedBreedsCount = breeds.count
+        }
+
+        await store.receive(
+            .preparedBreedsViewState(
+                BreedsFeature.PreparedBreedsViewState(
+                    breedsByID: Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) }),
+                    orderedBreedIDs: sorted.map(\.id),
+                    filteredBreedIDs: sorted.map(\.id),
+                    visibleBreedIDs: Array(sorted.prefix(20).map(\.id)),
+                    visibleCount: 20,
+                    canLoadMore: true
+                ),
+                1
+            )
+        ) {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) })
             $0.orderedBreedIDs = sorted.map(\.id)
             $0.filteredBreedIDs = sorted.map(\.id)
             $0.visibleBreedIDs = Array(sorted.prefix(20).map(\.id))
             $0.visibleCount = 20
             $0.canLoadMore = true
+            $0.pendingPreparedBreedsCount = 0
         }
 
         await store.send(.loadNextPage) {
@@ -66,12 +84,30 @@ struct BreedsFeatureTests {
         }
 
         await store.send(.cachedBreedsLoaded(breeds)) {
+            $0.preparationGeneration = 1
+            $0.pendingPreparedBreedsCount = breeds.count
+        }
+
+        await store.receive(
+            .preparedBreedsViewState(
+                BreedsFeature.PreparedBreedsViewState(
+                    breedsByID: Dictionary(uniqueKeysWithValues: breeds.map { ($0.id, $0) }),
+                    orderedBreedIDs: breeds.map(\.id),
+                    filteredBreedIDs: ["1"],
+                    visibleBreedIDs: ["1"],
+                    visibleCount: 1,
+                    canLoadMore: false
+                ),
+                1
+            )
+        ) {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: breeds.map { ($0.id, $0) })
             $0.orderedBreedIDs = breeds.map(\.id)
             $0.filteredBreedIDs = ["1"]
             $0.visibleBreedIDs = ["1"]
             $0.visibleCount = 1
             $0.canLoadMore = false
+            $0.pendingPreparedBreedsCount = 0
         }
     }
 
@@ -168,12 +204,30 @@ struct BreedsFeatureTests {
         }
 
         await store.send(.cachedBreedsLoaded(breeds)) {
+            $0.preparationGeneration = 1
+            $0.pendingPreparedBreedsCount = breeds.count
+        }
+
+        await store.receive(
+            .preparedBreedsViewState(
+                BreedsFeature.PreparedBreedsViewState(
+                    breedsByID: ["abys": breeds[0]],
+                    orderedBreedIDs: ["abys"],
+                    filteredBreedIDs: ["abys"],
+                    visibleBreedIDs: ["abys"],
+                    visibleCount: 1,
+                    canLoadMore: false
+                ),
+                1
+            )
+        ) {
             $0.breedsByID = ["abys": breeds[0]]
             $0.orderedBreedIDs = ["abys"]
             $0.filteredBreedIDs = ["abys"]
             $0.visibleBreedIDs = ["abys"]
             $0.visibleCount = 1
             $0.canLoadMore = false
+            $0.pendingPreparedBreedsCount = 0
             $0.imageHydrationInFlight = ["abys"]
         }
 
