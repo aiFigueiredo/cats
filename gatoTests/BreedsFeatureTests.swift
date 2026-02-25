@@ -36,11 +36,13 @@ struct BreedsFeatureTests {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) })
             $0.orderedBreedIDs = sorted.map(\.id)
             $0.filteredBreedIDs = sorted.map(\.id)
+            $0.visibleBreedIDs = Array(sorted.prefix(20).map(\.id))
             $0.visibleCount = 20
             $0.canLoadMore = true
         }
 
         await store.send(.loadNextPage) {
+            $0.visibleBreedIDs = Array(sorted.prefix(40).map(\.id))
             $0.visibleCount = 40
             $0.canLoadMore = true
         }
@@ -67,6 +69,7 @@ struct BreedsFeatureTests {
             $0.breedsByID = Dictionary(uniqueKeysWithValues: breeds.map { ($0.id, $0) })
             $0.orderedBreedIDs = breeds.map(\.id)
             $0.filteredBreedIDs = ["1"]
+            $0.visibleBreedIDs = ["1"]
             $0.visibleCount = 1
             $0.canLoadMore = false
         }
@@ -82,6 +85,7 @@ struct BreedsFeatureTests {
         ]
         initialState.orderedBreedIDs = ["1"]
         initialState.filteredBreedIDs = ["1"]
+        initialState.visibleBreedIDs = ["1"]
         initialState.visibleCount = 1
         initialState.canLoadMore = false
 
@@ -118,6 +122,7 @@ struct BreedsFeatureTests {
         ]
         initialState.orderedBreedIDs = ["abys", "birm"]
         initialState.filteredBreedIDs = ["abys", "birm"]
+        initialState.visibleBreedIDs = ["abys", "birm"]
         initialState.visibleCount = 2
         initialState.canLoadMore = false
 
@@ -135,22 +140,19 @@ struct BreedsFeatureTests {
         }
     }
 
-    @Test("breed row appear hydrates missing image and persists it")
-    func breedRowAppearHydratesMissingImageAndPersistsIt() async {
+    @Test("cached load hydrates missing image and persists it in a batch flush")
+    func cachedLoadHydratesMissingImageAndPersistsItInBatchFlush() async {
         let expectedURL = URL(string: "https://cdn2.thecatapi.com/images/0XYvRd7oD.jpg")!
-        let persistedImage = LockedBox<(String, URL?)?>(nil)
+        let persistedImages = LockedBox<[String: URL?]>([:])
 
-        var initialState = BreedsFeature.State()
-        initialState.breedsByID = [
-            "abys": Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
+        let breeds = [
+            Breed(id: "abys", name: "Abyssinian", origin: nil, temperament: nil, description: nil, lifeSpan: nil, imageURL: nil, isFavorite: false)
         ]
-        initialState.orderedBreedIDs = ["abys"]
-        initialState.filteredBreedIDs = ["abys"]
-        initialState.visibleCount = 1
 
-        let store = TestStore(initialState: initialState) {
+        let store = TestStore(initialState: BreedsFeature.State()) {
             BreedsFeature()
         } withDependencies: {
+            $0.continuousClock = ContinuousClock()
             $0.apiClient = CatAPIClient(
                 fetchBreeds: { _, _ in [] },
                 fetchBreedImage: { breedID in
@@ -159,23 +161,33 @@ struct BreedsFeatureTests {
                 }
             )
             $0.persistenceClient = .mock(
-                updateBreedImage: { breedID, imageURL in
-                    persistedImage.withValue { $0 = (breedID, imageURL) }
+                updateBreedImagesBatch: { updates, _ in
+                    persistedImages.withValue { $0.merge(updates) { _, new in new } }
                 }
             )
         }
 
-        await store.send(.breedRowAppeared("abys")) {
+        await store.send(.cachedBreedsLoaded(breeds)) {
+            $0.breedsByID = ["abys": breeds[0]]
+            $0.orderedBreedIDs = ["abys"]
+            $0.filteredBreedIDs = ["abys"]
+            $0.visibleBreedIDs = ["abys"]
+            $0.visibleCount = 1
+            $0.canLoadMore = false
             $0.imageHydrationInFlight = ["abys"]
         }
 
         await store.receive(.breedImageHydrated("abys", expectedURL)) {
             $0.imageHydrationInFlight = []
             $0.breedsByID["abys"]?.imageURL = expectedURL
+            $0.pendingImagePersistence = ["abys": expectedURL]
         }
 
-        let saved = persistedImage.withValue { $0 }
-        #expect(saved?.0 == "abys")
-        #expect(saved?.1 == expectedURL)
+        await store.receive(.flushPendingImagePersistence) {
+            $0.pendingImagePersistence = [:]
+        }
+
+        let saved = persistedImages.withValue { $0 }
+        #expect((saved["abys"] ?? nil) == expectedURL)
     }
 }
