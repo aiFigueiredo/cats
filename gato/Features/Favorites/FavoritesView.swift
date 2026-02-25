@@ -48,28 +48,31 @@ struct FavoritesView: View {
 
                         LazyVGrid(columns: gridColumns, spacing: 16) {
                             ForEach(store.favorites) { breed in
-                                VStack(spacing: 8) {
-                                    NavigationLink {
-                                        BreedDetailView(
-                                            state: BreedDetailFeature.State(
-                                                breed: breed,
-                                                isFavoriteToggleInFlight: store.favoriteToggleInFlight.contains(breed.id)
-                                            ),
-                                            imageClient: imageClient,
-                                            onToggleFavorite: {
-                                                store.send(.toggleFavoriteTapped(breed.id))
-                                            }
-                                        )
-                                    } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    NavigationLink(value: FavoritesRoute.breedDetail(FavoritesDetailRoute(breed: breed))) {
                                         BreedGridTileContent(
                                             breed: breed,
                                             imageClient: imageClient,
-                                            onFavorite: {
-                                                store.send(.toggleFavoriteTapped(breed.id))
-                                            }
+                                            onFavorite: nil
                                         )
+                                        .equatable()
                                     }
                                     .buttonStyle(.plain)
+
+                                    Button {
+                                        store.send(.toggleFavoriteTapped(breed.id))
+                                    } label: {
+                                        Image(systemName: breed.isFavorite ? "star.fill" : "star")
+                                            .foregroundStyle(.yellow)
+                                            .frame(width: 32, height: 32)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .zIndex(1)
+                                    .disabled(store.favoriteToggleInFlight.contains(breed.id))
+                                    .padding(.top, 4)
+                                    .padding(.trailing, 4)
+                                    .accessibilityLabel("Remove \(breed.name) from favorites")
+                                    .accessibilityIdentifier("remove_favorite_\(breed.id)")
                                 }
                             }
                         }

@@ -59,13 +59,7 @@ struct BreedsView: View {
                     ForEach(store.visibleBreedIDs, id: \.self) { breedID in
                         if let breed = store.breedsByID[breedID] {
                             VStack(spacing: 8) {
-                                NavigationLink {
-                                    BreedDetailView(
-                                        breedID: breed.id,
-                                        breedsStore: store,
-                                        imageClient: imageClient
-                                    )
-                                } label: {
+                                NavigationLink(value: BreedsRoute.breedDetail(breed.id)) {
                                     BreedGridTileContent(
                                         breed: breed,
                                         imageClient: imageClient,

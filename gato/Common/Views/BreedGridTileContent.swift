@@ -10,7 +10,7 @@ import SwiftUI
 struct BreedGridTileContent: View, Equatable {
     let breed: Breed
     let imageClient: ImageClient
-    let onFavorite: () -> Void
+    let onFavorite: (() -> Void)?
 
     static func == (lhs: BreedGridTileContent, rhs: BreedGridTileContent) -> Bool {
         lhs.breed == rhs.breed
@@ -47,15 +47,17 @@ struct BreedGridTileContent: View, Equatable {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .overlay(alignment: .topTrailing) {
-            Button {
-                onFavorite()
-            } label: {
-                Image(systemName: breed.isFavorite ? "star.fill" : "star")
-                    .foregroundStyle(.yellow)
-                    .frame(width: 32, height: 32)
+            if let onFavorite {
+                Button {
+                    onFavorite()
+                } label: {
+                    Image(systemName: breed.isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(.yellow)
+                        .frame(width: 32, height: 32)
+                }
+                .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
+                .accessibilityIdentifier("favorite_\(breed.id)")
             }
-            .accessibilityLabel(breed.isFavorite ? "Remove \(breed.name) from favorites" : "Add \(breed.name) to favorites")
-            .accessibilityIdentifier("favorite_\(breed.id)")
         }
     }
 }

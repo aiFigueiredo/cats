@@ -2,6 +2,16 @@ import ComposableArchitecture
 import SwiftUI
 
 struct BreedDetailView: View {
+    struct State: Equatable {
+        var breed: Breed
+        var isFavoriteToggleInFlight: Bool
+
+        init(breed: Breed, isFavoriteToggleInFlight: Bool = false) {
+            self.breed = breed
+            self.isFavoriteToggleInFlight = isFavoriteToggleInFlight
+        }
+    }
+
     private let source: Source
 
     init(
@@ -17,7 +27,7 @@ struct BreedDetailView: View {
     }
 
     init(
-        state: BreedDetailFeature.State,
+        state: State,
         imageClient: ImageClient,
         onToggleFavorite: @escaping () -> Void
     ) {
@@ -34,7 +44,7 @@ struct BreedDetailView: View {
         case let .breeds(breedID, breedsStore, imageClient):
             if let breed = breedsStore.breedsByID[breedID] {
                 detailContent(
-                    state: BreedDetailFeature.State(
+                    state: State(
                         breed: breed,
                         isFavoriteToggleInFlight: breedsStore.favoriteToggleInFlight.contains(breedID)
                     ),
@@ -58,7 +68,7 @@ struct BreedDetailView: View {
     }
 
     private func detailContent(
-        state: BreedDetailFeature.State,
+        state: State,
         imageClient: ImageClient,
         onToggleFavorite: @escaping () -> Void
     ) -> some View {
@@ -113,7 +123,7 @@ private extension BreedDetailView {
         )
 
         case standalone(
-            state: BreedDetailFeature.State,
+            state: State,
             imageClient: ImageClient,
             onToggleFavorite: () -> Void
         )
