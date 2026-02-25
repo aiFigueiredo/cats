@@ -73,18 +73,21 @@ struct BreedsView: View {
                         .equatable()
                     }
                     .contentShape(Rectangle())
-                }
-            }
-
-            if store.canLoadMore {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
                     .onAppear {
-                        store.send(.loadNextPage)
+                        if breed.imageURL == nil {
+                            store.send(.breedRowAppeared(breed.id))
+                        }
+                        if store.canLoadMore, breed.id == store.visibleBreedIDs.last {
+                            store.send(.loadNextPage)
+                        }
                     }
+                }
             }
         }
         .listStyle(.plain)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
         .accessibilityIdentifier("breeds_list")
     }
 

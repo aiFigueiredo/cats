@@ -33,6 +33,7 @@ struct BreedsFeature {
         var pendingImagePersistence: [Breed.ID: URL] = [:]
         var preparationGeneration = 0
         var pendingPreparedBreedsCount = 0
+        var lastPaginationTriggerVisibleCount = -1
 
         var visibleBreeds: [Breed] {
             visibleBreedIDs.compactMap { breedsByID[$0] }
@@ -53,6 +54,7 @@ struct BreedsFeature {
         case retryTapped
         case dismissBanner
         case toggleFavoriteTapped(String)
+        case breedRowAppeared(String)
         case flushPendingImagePersistence
         case favoriteFlagsRefreshed(Set<String>)
         case breedImageHydrated(String, URL?)
@@ -128,6 +130,10 @@ struct BreedsFeature {
                 state.bannerMessage = message
                 return .none
 
+            case .breedRowAppeared(let breedID):
+                enqueueImageHydration(state: &state, breedID: breedID)
+                return .merge(drainHydrationQueue(state: &state))
+
             case .flushPendingImagePersistence:
                 let cancelScheduledFlush = Effect<Action>.cancel(id: "image-persistence-flush")
                 guard !state.pendingImagePersistence.isEmpty else { return .none }
@@ -188,6 +194,7 @@ struct BreedsFeature {
                 state.visibleCount = prepared.visibleCount
                 state.canLoadMore = prepared.canLoadMore
                 state.pendingPreparedBreedsCount = 0
+                state.lastPaginationTriggerVisibleCount = -1
                 resetHydrationQueue(state: &state)
                 state.pendingImagePersistence.removeAll(keepingCapacity: true)
                 state.imageHydrationInFlight = state.imageHydrationInFlight.intersection(Set(state.orderedBreedIDs))
@@ -209,15 +216,11 @@ struct BreedsFeature {
                 return .none
 
             case .loadNextPage:
-                let previousVisibleCount = state.visibleCount
+                guard state.canLoadMore else { return .none }
+                guard state.lastPaginationTriggerVisibleCount != state.visibleCount else { return .none }
+                state.lastPaginationTriggerVisibleCount = state.visibleCount
                 appendNextPage(state: &state)
-                if state.visibleCount > previousVisibleCount {
-                    let newRange = previousVisibleCount ..< state.visibleCount
-                    for breedID in state.visibleBreedIDs[newRange] {
-                        enqueueImageHydration(state: &state, breedID: breedID)
-                    }
-                }
-                return .merge(drainHydrationQueue(state: &state))
+                return .none
             }
         }
     }

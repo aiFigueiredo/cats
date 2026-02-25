@@ -63,6 +63,7 @@ struct BreedsFeatureTests {
             $0.visibleBreedIDs = Array(sorted.prefix(40).map(\.id))
             $0.visibleCount = 40
             $0.canLoadMore = true
+            $0.lastPaginationTriggerVisibleCount = 20
         }
     }
 
