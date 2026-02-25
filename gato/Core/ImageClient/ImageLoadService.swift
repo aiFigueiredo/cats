@@ -16,6 +16,8 @@ actor ImageLoadService {
 
     init(session: URLSession = .shared) {
         self.session = session
+        memoryCache.countLimit = 300
+        memoryCache.totalCostLimit = 60 * 1024 * 1024
     }
 
     func subscribe(_ url: URL) -> UUID {
@@ -55,11 +57,11 @@ actor ImageLoadService {
             let image = try await task.value
             memoryCache.setObject(image, forKey: url as NSURL)
             inFlightTasks.removeValue(forKey: url)
-            cleanupSubscriptionsIfNeeded(for: url)
+            clearSubscriptions(for: url)
             return image
         } catch {
             inFlightTasks.removeValue(forKey: url)
-            cleanupSubscriptionsIfNeeded(for: url)
+            clearSubscriptions(for: url)
             throw error
         }
     }
@@ -79,8 +81,10 @@ actor ImageLoadService {
         }
     }
 
-    private func cleanupSubscriptionsIfNeeded(for url: URL) {
-        guard let subscribers = subscribersByURL[url], subscribers.isEmpty else { return }
-        subscribersByURL.removeValue(forKey: url)
+    private func clearSubscriptions(for url: URL) {
+        guard let subscribers = subscribersByURL.removeValue(forKey: url) else { return }
+        for subscriptionID in subscribers {
+            subscriptionToURL.removeValue(forKey: subscriptionID)
+        }
     }
 }

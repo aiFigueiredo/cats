@@ -33,8 +33,11 @@ struct RemoteImageView<Content: View, Placeholder: View>: View {
             }
         }
         .task(id: url) {
-            cancelLoading()
-            image = nil
+            let urlDidChange = activeURL != url
+            if urlDidChange {
+                cancelLoading()
+                image = nil
+            }
             startLoading(for: url)
         }
         .onDisappear {
