@@ -13,6 +13,7 @@
 		35BB6DB62F4DA020001ACEE7 /* CasePaths in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB42F4DA015001ACEE7 /* CasePaths */; };
 		35BB6DB72F4DA026001ACEE7 /* Dependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB32F4DA00F001ACEE7 /* Dependencies */; };
 		35BB6DB82F4DA02C001ACEE7 /* CasePaths in Frameworks */ = {isa = PBXBuildFile; productRef = 35BB6DB42F4DA015001ACEE7 /* CasePaths */; };
+		9F8E7D6C2F600001001ACEE7 /* PerceptionCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9F8E7D6F2F600001001ACEE7 /* PerceptionCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,7 @@
 				35BB6DB62F4DA020001ACEE7 /* CasePaths in Frameworks */,
 				35BB6DB52F4DA01A001ACEE7 /* Dependencies in Frameworks */,
 				15AD2B542F4D2736001ACEE7 /* ComposableArchitecture in Frameworks */,
+				9F8E7D6C2F600001001ACEE7 /* PerceptionCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -144,6 +146,7 @@
 				35BB6DB42F4DA015001ACEE7 /* CasePaths */,
 				35BB6DB32F4DA00F001ACEE7 /* Dependencies */,
 				15AD2B532F4D2736001ACEE7 /* ComposableArchitecture */,
+				9F8E7D6F2F600001001ACEE7 /* PerceptionCore */,
 			);
 			productName = gato;
 			productReference = 15AD26AB2F4C839F001ACEE7 /* gato.app */;
@@ -234,6 +237,7 @@
 				35BB6DB22F4DA009001ACEE7 /* XCRemoteSwiftPackageReference "swift-case-paths" */,
 				35BB6DB12F4DA001001ACEE7 /* XCRemoteSwiftPackageReference "swift-dependencies" */,
 				15AD2B512F4D2726001ACEE7 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				9F8E7D6E2F600001001ACEE7 /* XCRemoteSwiftPackageReference "swift-perception" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 15AD26AC2F4C839F001ACEE7 /* Products */;
@@ -687,6 +691,14 @@
 				minimumVersion = 1.7.2;
 			};
 		};
+		9F8E7D6E2F600001001ACEE7 /* XCRemoteSwiftPackageReference "swift-perception" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/swift-perception";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.9;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -704,6 +716,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 35BB6DB22F4DA009001ACEE7 /* XCRemoteSwiftPackageReference "swift-case-paths" */;
 			productName = CasePaths;
+		};
+		9F8E7D6F2F600001001ACEE7 /* PerceptionCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F8E7D6E2F600001001ACEE7 /* XCRemoteSwiftPackageReference "swift-perception" */;
+			productName = PerceptionCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
