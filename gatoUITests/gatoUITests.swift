@@ -9,11 +9,11 @@ final class gatoUITests: XCTestCase {
     func testBreedsListDisplaysOnLaunch() throws {
         let app = launchApp()
 
-        XCTAssertTrue(app.navigationBars["Breeds"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Cats App"].waitForExistence(timeout: 5))
         XCTAssertTrue(
-            app.scrollViews["breeds_list"].waitForExistence(timeout: 5)
-            || app.collectionViews["breeds_list"].waitForExistence(timeout: 5)
-            || app.tables["breeds_list"].waitForExistence(timeout: 5)
+            app.scrollViews["cats_list"].waitForExistence(timeout: 5)
+            || app.collectionViews["cats_list"].waitForExistence(timeout: 5)
+            || app.tables["cats_list"].waitForExistence(timeout: 5)
         )
         XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
     }
@@ -35,7 +35,9 @@ final class gatoUITests: XCTestCase {
     func testFavoriteFlowUpdatesFavoritesAverage() throws {
         let app = launchApp()
 
-        let favoriteButton = app.buttons["favorite_abys"]
+        let favoriteButton = app.buttons.matching(
+            NSPredicate(format: "identifier == %@ AND label == %@", "favorite_abys", "Add Abyssinian to favorites")
+        ).firstMatch
         XCTAssertTrue(favoriteButton.waitForExistence(timeout: 5))
         favoriteButton.tap()
 
@@ -57,8 +59,13 @@ final class gatoUITests: XCTestCase {
             "UI_TEST_OFFLINE": "1"
         ])
 
-        XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "identifier == 'breeds_error_banner' OR label CONTAINS[c] 'No internet connection'")).firstMatch.exists)
+        XCTAssertTrue(
+            app.scrollViews["cats_list"].waitForExistence(timeout: 10)
+            || app.collectionViews["cats_list"].waitForExistence(timeout: 10)
+            || app.tables["cats_list"].waitForExistence(timeout: 10)
+        )
+        XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "identifier == 'cats_error_banner' OR label CONTAINS[c] 'No internet connection'")).firstMatch.exists)
     }
 
     @MainActor
@@ -71,9 +78,9 @@ final class gatoUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Abyssinian"].waitForExistence(timeout: 5))
         app.staticTexts["Abyssinian"].tap()
 
-        let detailFavoriteButton = app.buttons["detail_favorite_button"]
+        let detailFavoriteButton = app.buttons["favorite_abys"]
         XCTAssertTrue(detailFavoriteButton.waitForExistence(timeout: 5))
-        XCTAssertEqual(detailFavoriteButton.label, "Remove from Favorites")
+        XCTAssertEqual(detailFavoriteButton.label, "Remove Abyssinian from favorites")
 
         app.tabBars.buttons["Favorites"].tap()
 
@@ -86,10 +93,10 @@ final class gatoUITests: XCTestCase {
         waitForExpectations(timeout: 5)
         XCTAssertTrue(app.staticTexts["No favorites yet"].waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Breeds"].tap()
+        app.tabBars.buttons["Cats List"].tap()
         XCTAssertTrue(detailFavoriteButton.waitForExistence(timeout: 5))
 
-        let addToFavoritesPredicate = NSPredicate(format: "label == %@", "Add to Favorites")
+        let addToFavoritesPredicate = NSPredicate(format: "label == %@", "Add Abyssinian to favorites")
         expectation(for: addToFavoritesPredicate, evaluatedWith: detailFavoriteButton)
         waitForExpectations(timeout: 5)
     }
