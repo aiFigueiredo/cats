@@ -12,6 +12,14 @@
 - `Swift Testing` + `TestStore` for unit/integration tests
 - `XCUITest` (`XCTest`) for UI automation
 
+## Toolchain and Dependency Versions
+
+- `Xcode 26.2` (`17C52`)
+- `swift-composable-architecture 1.24.0` (TCA)
+- `swift-navigation 2.7.0` (used with TCA-driven navigation)
+
+Source of truth for dependency pins: `gato.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`.
+
 ## Current Architecture
 
 ### Features

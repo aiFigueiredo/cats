@@ -39,15 +39,27 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
   2. Standalone mode (`state + callback`) for favorites navigation.
 - Cross-tab favorite synchronization currently depends on `AppView.handleTabSelection` and favorites-state change propagation.
 - `ImageLoadService` is actor-based and owns in-memory cache, in-flight task deduplication, and cancellation by subscriber id.
+- Current UI accessibility contract used by `gatoUITests`:
+  - Root navigation title is `Cats App`.
+  - Breeds list container identifier is `cats_list` (can render as `ScrollView`, `CollectionView`, or `Table`).
+  - Offline banner identifier is `cats_error_banner`.
+  - Breeds tab title is `Cats List`.
+  - Favorite button identifier pattern is `favorite_<breedID>` (including in detail).
+  - Favorite button labels are breed-specific (`Add <Breed> to favorites` / `Remove <Breed> from favorites`).
 
 ### Regression learnings (do not regress)
 - Keep favorites remove button outside `NavigationLink` tap area in `FavoritesView` rows. Nesting the button inside the link causes tap conflicts and stale state symptoms.
 - When changing tab-sync logic, verify detail state updates after removing a favorite from Favorites and switching back to Breeds.
 - Preserve `RemoteImageView` `activeURL` guard and `CatAPIClient.fetchBreedImage` breed-id mismatch guard to prevent wrong-image assignment.
+- Do not use stale UI copy/identifiers in tests (`Breeds`, `breeds_list`, `breeds_error_banner`, `detail_favorite_button` are outdated).
+- For favorite controls in UI tests, avoid plain `app.buttons["favorite_<id>"]` when duplicates may exist; use a predicate that includes both identifier and expected label.
+- Prefer updating tests to match existing accessibility contract unless product requirements explicitly changed.
 
 ### Required verification after related changes
 - If touching favorites/detail/tab-sync flows, run:
   - `xcodebuild -scheme gato -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:gatoUITests/gatoUITests/testBreedDetailFavoriteStateRefreshesAfterRemovingInFavoritesTab test -derivedDataPath /tmp/gato-dd CODE_SIGNING_ALLOWED=NO`
+- If touching accessibility labels/identifiers, navigation titles, tab titles, or UI test selectors, run:
+  - `xcodebuild -scheme gato -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:gatoUITests test -derivedDataPath /tmp/gato-dd CODE_SIGNING_ALLOWED=NO`
 - If touching image loading, run `ImageLoadServiceTests` and `CatAPIClientTests`.
 
 ### Secrets and config policy
